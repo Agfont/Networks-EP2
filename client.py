@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from ast import parse
 import socket
 import time
 import threading
@@ -6,20 +7,18 @@ import threading
 MAXLINE = 4096
 BEATWAIT = 5
 
-# python3 main.py 192.168.15.25 8000
-# telnet 192.168.15.25 8000
 def client(addr, port):
     clientSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    #p2pSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     clientSocket.settimeout(10)
-    #p2pSocket.settimeout(10)
+
+    # p2pSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
         clientSocket.connect((addr, port))
         hb_thread = threading.Thread(target=heartbeat,args=(clientSocket,))
         hb_thread.daemon = True
         hb_thread.start()
-        '''
-        p2p_thread = threading.Thread(target=p2p,args=(p2pSocket,))
+        
+        '''p2p_thread = threading.Thread(target=p2p,args=(p2pSocket,))
         p2p_thread.daemon = True
         p2p_thread.start()'''
 
@@ -56,7 +55,7 @@ def client(addr, port):
                     print("  User  |  Score")
                     print(data)
                     print("-----------------------")
-            elif "list" in entry:
+            elif command == "list":
                 clientSocket.send(entry.encode())
                 data = clientSocket.recv(MAXLINE).decode()
                 if len(data) > 0:
@@ -65,13 +64,11 @@ def client(addr, port):
                     print("-------------------")      
             elif command == "begin":
                 clientSocket.send(entry.encode())
-            elif command == "INVITE":
                 data = clientSocket.recv(MAXLINE).decode()
-                msg = input("Do you want to play? (y/n)")
-                if msg == "y":
-                    clientSocket.send("ACCEPTED".encode())
-                else:
-                    clientSocket.send("DENIED".encode())
+                if len(data) > 0:
+                    print("----- IP Opponent -----")
+                    print(data)
+                    print("-------------------")   
             # P2P Communication  
             elif command == "send":
                 print("TODO: Send")
@@ -98,8 +95,22 @@ def heartbeat(socket):
         time.sleep(BEATWAIT)
 
 ''' P2P for communication between clients '''
-def p2p(socket):
+def p2p(socket, addr):
     while True:
-        data = socket.recv(MAXLINE).decode()
-        #print("Heartbet sent (By client)!") 
-        time.sleep(BEATWAIT)
+        data = socket.recvfrom((MAXLINE).decode(), addr)
+'''
+def inviteToPlay(socket, addr):
+    socket.settimeout(None)
+    while True:
+        data = socket.recvfrom((MAXLINE).decode(), addr)
+        entries = data.split()
+        if entries == []:
+            continue
+        command = entries[0]
+        if command == "INVITE":
+            print(data)
+            msg = input("Do you want to play? (y/n)")
+            if msg == "y":
+                socket.sendto("ACCEPTED".encode(), addr)
+            else:
+                socket.sendto("DENIED".encode(), addr)'''

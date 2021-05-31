@@ -2,7 +2,6 @@
 import socket
 import threading
 import datetime
-import time
 from user import User
 
 LISTENQ = 1
@@ -49,6 +48,7 @@ def server(port):
 
 ''' Server receives a heartbeat from clients every 10s '''
 def handle_new_client(clientSocket, addr, users, log):
+    # Timeout setted to detect an unexpected client disconnection
     clientSocket.settimeout(BEATWAIT)
     exit = False
     userLoggedIn = None
@@ -63,11 +63,9 @@ def handle_new_client(clientSocket, addr, users, log):
                     if len(entries) == 3:
                         username = entries[1]
                         passwd = entries[2]
-                        print("ADDUSER")
                         if findUser(username, users):
                             print("User already exists!")
                         else:
-                            # TODO: Problema crear outro user (append), mesmo no mesmo thread
                             print("User created!")
                             userCreated = User(username, passwd)
                             lock.acquire()
@@ -88,11 +86,14 @@ def handle_new_client(clientSocket, addr, users, log):
                         passwd = entries[2]
                         user = findUser(username, users)
                         if user:
-                            if passwd == user.passwd:
-                                user.login(addr)
-                                userLoggedIn = user
-                        else:
-                            print("Password incorrect")
+                            if not user.logged_in:
+                                if passwd == user.passwd:
+                                    user.login(addr)
+                                    userLoggedIn = user
+                                else:
+                                    print("Password incorrect")
+                            else:
+                                print("User logged in on other device")
                 elif command == "leaders":
                     score_table = ''
                     for user in users:
@@ -107,17 +108,19 @@ def handle_new_client(clientSocket, addr, users, log):
                     if not data: data = "There isn't any users online"
                     clientSocket.send(data.encode())                 
                 elif command == "begin":
+                    # TODO: Begin command
                     print("DEBUG: Begin")
                     if len(entries) == 2:
                         username = entries[1]
                         oponent = findUser(username, users)
                         if oponent:
                             if oponent.logged_in:
-                                data = 'INVITE received from ' + oponent
-                                oponent_addr = user.addr
-                                clientSocket.sendto(data.encode(), oponent_addr)
-                elif command == "send":
-                    print("TODO: Send")
+                                print(oponent.addr, oponent.username) # DEBUG
+                                clientSocket.send(str(oponent.addr).encode())
+                elif command == "ACCEPTED":
+                    print("TODO: ACCEPTED")
+                elif command == "DENIED":
+                    print("TODO: DENIED")
                 elif command == "send":
                     print("TODO: Send")
                 elif command == "delay":
@@ -125,7 +128,7 @@ def handle_new_client(clientSocket, addr, users, log):
                 elif command ==  "end":
                     print("TODO: End")
                 elif command == "logout":
-                    print("TODO: Logout")
+                    userLoggedIn.logout()
                     userLoggedIn = None
                 elif command == "exit":
                     exit = True
@@ -139,7 +142,8 @@ def handle_new_client(clientSocket, addr, users, log):
     log.write("["+str(datetime.datetime.now())+"] "+"Cliente "+str(addr)+" desconectado!\n")
     clientSocket.close()
 
-
+''' Find an user by username
+    -> return: None or user '''
 def findUser(username, users):
     i = 0
     found = False
