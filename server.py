@@ -7,7 +7,9 @@ from user import User
 LISTENQ = 1
 MAXLINE = 4096
 BEATWAIT = 10
-lock = threading.Lock()
+
+users = []
+users_lock = threading.Lock()
 
 def server(port):
     ''' Agora é necessário informar: endereço IP, interface e porta.
@@ -28,12 +30,11 @@ def server(port):
     log = open("server.log", "w")
     log.write(f"[{datetime.datetime.now()}] Servidor iniciado na porta {port}!\n")
 
-    users = []
     # Server waits for news connections
     while True:
         try:
             clientSocket, addr = servaddr.accept()
-            thread = threading.Thread(target = handle_new_client, args = (clientSocket, addr, users, log))
+            thread = threading.Thread(target = handle_new_client, args = (clientSocket, addr, log))
             thread.daemon = True
             thread.start()
             log.write(f"[{datetime.datetime.now()}] Cliente {addr} conectado!\n")
@@ -48,7 +49,7 @@ def server(port):
 
 
 ''' Server receives a heartbeat from clients every 10s '''
-def handle_new_client(clientSocket, addr, users, log):
+def handle_new_client(clientSocket, addr, log):
     # Timeout setted to detect an unexpected client disconnection
     clientSocket.settimeout(BEATWAIT)
     exit = False
@@ -64,14 +65,13 @@ def handle_new_client(clientSocket, addr, users, log):
                     if len(entries) == 3:
                         username = entries[1]
                         passwd = entries[2]
-                        if findUser(username, users):
+                        if findUser(username):
                             print("User already exists!")
                         else:
                             print("User created!")
                             userCreated = User(username, passwd)
-                            lock.acquire()
-                            users.append(userCreated)
-                            lock.release()
+                            with users_lock:
+                                users.append(userCreated)
                 elif command == "passwd":
                     if len(entries) == 3:
                         if userLoggedIn:
@@ -85,7 +85,7 @@ def handle_new_client(clientSocket, addr, users, log):
                     if len(entries) == 3:
                         username = entries[1]
                         passwd = entries[2]
-                        user = findUser(username, users)
+                        user = findUser(username)
                         if user:
                             if not user.logged_in:
                                 if passwd == user.passwd:
@@ -97,16 +97,18 @@ def handle_new_client(clientSocket, addr, users, log):
                                 print("User logged in on other device")
                 elif command == "leaders":
                     score_table = ''
-                    for user in users:
-                        score_table += user.username + "   " + str(user.score) + "\n"
+                    with users_lock:
+                        for user in users:
+                            score_table += user.username + "   " + str(user.score) + "\n"
                     if not score_table:
                         score_table = "There isn't any users registered"
                     clientSocket.send(score_table.encode())
                 elif command == "list":
                     data = ''
-                    for user in users:
-                        if user.logged_in:
-                            data += user.username + "\n"
+                    with users_lock:
+                        for user in users:
+                            if user.logged_in:
+                                data += user.username + "\n"
                     if not data:
                         data = "There isn't any users online"
                     clientSocket.send(data.encode())
@@ -116,7 +118,7 @@ def handle_new_client(clientSocket, addr, users, log):
                     if userLoggedIn:
                         if len(entries) == 2:
                             username = entries[1]
-                            oponent = findUser(username, users)
+                            oponent = findUser(username)
                             if oponent:
                                 if oponent.logged_in:
                                     print(oponent.addr, oponent.username) # DEBUG
@@ -157,8 +159,9 @@ def handle_new_client(clientSocket, addr, users, log):
 
 ''' Find an user by username
     -> return: None or user '''
-def findUser(username, users):
-    for user in users:
-        if user.username == username:
-            return user
+def findUser(username):
+    with users_lock:
+        for user in users:
+            if user.username == username:
+                return user
     return None
