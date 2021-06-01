@@ -110,17 +110,18 @@ def handle_new_client(clientSocket, addr, users, log):
                 elif command == "begin":
                     # TODO: Begin command
                     print("DEBUG: Begin")
-                    if len(entries) == 2:
-                        username = entries[1]
-                        oponent = findUser(username, users)
-                        if oponent:
-                            if oponent.logged_in:
-                                print(oponent.addr, oponent.username) # DEBUG
-                                clientSocket.send(str(oponent.addr).encode())
-                elif command == "ACCEPTED":
-                    print("TODO: ACCEPTED")
-                elif command == "DENIED":
-                    print("TODO: DENIED")
+                    if userLoggedIn:
+                        if len(entries) == 2:
+                            username = entries[1]
+                            oponent = findUser(username, users)
+                            if oponent:
+                                if oponent.logged_in:
+                                    print(oponent.addr, oponent.username) # DEBUG
+                                    clientSocket.send(str(oponent.addr).encode())
+                                else: clientSocket.send('User not logged in'.encode())
+                            else: clientSocket.send('User not found'.encode())
+                        else: clientSocket.send('The second argument must be an user'.encode())
+                    else: clientSocket.send('You need to log in first!'.encode())
                 elif command == "send":
                     print("TODO: Send")
                 elif command == "delay":
@@ -128,11 +129,16 @@ def handle_new_client(clientSocket, addr, users, log):
                 elif command ==  "end":
                     print("TODO: End")
                 elif command == "logout":
-                    userLoggedIn.logout()
-                    userLoggedIn = None
+                    if userLoggedIn:
+                        userLoggedIn.logout()
+                        userLoggedIn = None
                 elif command == "exit":
+                    if userLoggedIn:
+                        userLoggedIn.logout()
                     exit = True
                 elif command == "DISCONNECT":
+                    if userLoggedIn:
+                        userLoggedIn.logout()
                     exit = True
         except socket.timeout:
             # Heartbeat timeout (10s)
