@@ -15,7 +15,7 @@ def server(port):
         - socket (IPv4, TCP)
         - bind(IP Adress, Port)
         - listen(Listen Queue)
-     '''
+    '''
     servaddr = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     servaddr.bind(('', port))
     servaddr.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1) # Important
@@ -26,25 +26,26 @@ def server(port):
 
     # Create a log file
     log = open("server.log", "w")
-    log.write("["+str(datetime.datetime.now())+"] "+"Servidor iniciado na porta " +str(port)+"!\n")
+    log.write(f"[{datetime.datetime.now()}] Servidor iniciado na porta {port}!\n")
 
     users = []
     # Server waits for news connections
     while True:
         try:
             clientSocket, addr = servaddr.accept()
-            thread = threading.Thread(target=handle_new_client,args=(clientSocket, addr, users, log))
+            thread = threading.Thread(target = handle_new_client, args = (clientSocket, addr, users, log))
             thread.daemon = True
             thread.start()
-            log.write("["+str(datetime.datetime.now())+"] "+"Cliente "+str(addr)+" conectado!\n")
+            log.write(f"[{datetime.datetime.now()}] Cliente {addr} conectado!\n")
         except KeyboardInterrupt:
             break
 
     # After all, we close the socket and the log
     print("Exiting the server")
-    log.write("["+str(datetime.datetime.now())+"] "+"Servidor finalizado!\n")
+    log.write(f"[{datetime.datetime.now()}] Servidor finalizado!\n")
     log.close()
     servaddr.close()
+
 
 ''' Server receives a heartbeat from clients every 10s '''
 def handle_new_client(clientSocket, addr, users, log):
@@ -98,15 +99,17 @@ def handle_new_client(clientSocket, addr, users, log):
                     score_table = ''
                     for user in users:
                         score_table += user.username + "   " + str(user.score) + "\n"
-                    if not score_table: score_table = "There isn't any users registered"
+                    if not score_table:
+                        score_table = "There isn't any users registered"
                     clientSocket.send(score_table.encode())
                 elif command == "list":
                     data = ''
                     for user in users:
                         if user.logged_in:
                             data += user.username + "\n"
-                    if not data: data = "There isn't any users online"
-                    clientSocket.send(data.encode())                 
+                    if not data:
+                        data = "There isn't any users online"
+                    clientSocket.send(data.encode())
                 elif command == "begin":
                     # TODO: Begin command
                     print("DEBUG: Begin")
@@ -118,10 +121,14 @@ def handle_new_client(clientSocket, addr, users, log):
                                 if oponent.logged_in:
                                     print(oponent.addr, oponent.username) # DEBUG
                                     clientSocket.send(str(oponent.addr).encode())
-                                else: clientSocket.send('User not logged in'.encode())
-                            else: clientSocket.send('User not found'.encode())
-                        else: clientSocket.send('The second argument must be an user'.encode())
-                    else: clientSocket.send('You need to log in first!'.encode())
+                                else:
+                                    clientSocket.send('User not logged in'.encode())
+                            else:
+                                clientSocket.send('User not found'.encode())
+                        else:
+                            clientSocket.send('The second argument must be an user'.encode())
+                    else:
+                        clientSocket.send('You need to log in first!'.encode())
                 elif command == "send":
                     print("TODO: Send")
                 elif command == "delay":
@@ -142,11 +149,11 @@ def handle_new_client(clientSocket, addr, users, log):
                     exit = True
         except socket.timeout:
             # Heartbeat timeout (10s)
-            log.write("["+str(datetime.datetime.now())+"] "+"Cliente "+str(addr)+
-                        " desconectado inesperadamente!\n")
+            log.write(f"[{datetime.datetime.now()}] Cliente {addr} desconectado inesperadamente!\n")
             exit = True
-    log.write("["+str(datetime.datetime.now())+"] "+"Cliente "+str(addr)+" desconectado!\n")
+    log.write(f"[{datetime.datetime.now()}] Cliente {addr} desconectado!\n")
     clientSocket.close()
+
 
 ''' Find an user by username
     -> return: None or user '''

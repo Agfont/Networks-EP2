@@ -15,11 +15,11 @@ def client(addr, port):
     p2pSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
         clientSocket.connect((addr, port))
-        hb_thread = threading.Thread(target=heartbeat,args=(clientSocket,))
+        hb_thread = threading.Thread(target = heartbeat,args = (clientSocket,))
         hb_thread.daemon = True
         hb_thread.start()
 
-        recvInvites_thread = threading.Thread(target=p2p, args=(p2pSocket,))
+        recvInvites_thread = threading.Thread(target = p2p, args = (p2pSocket,))
         recvInvites_thread.daemon = True
         recvInvites_thread.start()
 
@@ -90,11 +90,13 @@ def client(addr, port):
             clientSocket.close()
             state = "exit"
 
+
 ''' Client sends a heartbeat to the sever every 5s '''
 def heartbeat(socket):
     while True:
         socket.send('Thump!'.encode())
         time.sleep(BEATWAIT)
+
 
 ''' P2P for communication between clients '''
 def p2p(socket):
