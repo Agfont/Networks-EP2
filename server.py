@@ -158,12 +158,7 @@ def handle_new_client(clientSocket, addr, users, log):
 ''' Find an user by username
     -> return: None or user '''
 def findUser(username, users):
-    i = 0
-    found = False
-    user = None
-    while (i < len(users) and not found):
-        if users[i].username == username:
-            user = users[i]
-            found = True
-        i += 1
-    return user
+    for user in users:
+        if user.username == username:
+            return user
+    return None
