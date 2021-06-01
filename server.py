@@ -27,7 +27,7 @@ def server(port):
     # Create a log file
     log = open("server.log", "w")
     log.write("["+str(datetime.datetime.now())+"] "+"Servidor iniciado na porta " +str(port)+"!\n")
-    
+
     users = []
     # Server waits for news connections
     while True:
@@ -39,7 +39,7 @@ def server(port):
             log.write("["+str(datetime.datetime.now())+"] "+"Cliente "+str(addr)+" conectado!\n")
         except KeyboardInterrupt:
             break
-        
+
     # After all, we close the socket and the log
     print("Exiting the server")
     log.write("["+str(datetime.datetime.now())+"] "+"Servidor finalizado!\n")

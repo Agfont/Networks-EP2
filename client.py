@@ -29,7 +29,7 @@ def client(addr, port):
     except socket.error:
         print("Client cannot connect to the server!")
         exit()
-    
+
     state = None
     while state != "exit":
         ''' Client communication with server '''
@@ -62,7 +62,7 @@ def client(addr, port):
                 if len(data) > 0:
                     print("----- Players -----")
                     print(data)
-                    print("-------------------")      
+                    print("-------------------")
             elif command == "begin":
                 clientSocket.send(entry.encode())
                 data = clientSocket.recv(MAXLINE).decode()
@@ -109,7 +109,7 @@ def p2p(socket):
             command = entries[0]
             # TODO: Invites
             if command == "INVITE":
-                print("DATA RECEIVED: ", msg) 
+                print("DATA RECEIVED: ", msg)
                 msg = input("Do you want to play? (y/n)")
                 if msg == "y":
                     socket.sendto("ACCEPTED".encode(), addr)

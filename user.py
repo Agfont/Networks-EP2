@@ -8,7 +8,7 @@ class User:
         self.is_playing = False
         self.score = 0
         self.addr = None
-    
+
     def __str__(self):
         return self.username
 
@@ -21,9 +21,9 @@ class User:
     def login(self, addr):
         self.logged_in = True
         self.addr = addr
-        
+
     def logout(self):
         self.logged_in = False
-        
+
     def updateScore(self, points):
         self.score += points
