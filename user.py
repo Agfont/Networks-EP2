@@ -15,8 +15,8 @@ class User:
     def setPasswd(self, old_passwd, new_passwd):
         if old_passwd == self.passwd:
             self.passwd = new_passwd
-        else:
-            print("Old password incorrect!")
+            return True
+        return False
 
     def login(self, addr):
         self.logged_in = True

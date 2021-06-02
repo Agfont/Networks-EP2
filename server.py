@@ -26,136 +26,159 @@ def server(port):
     print(f"[Servidor no ar. Aguardando conexões na porta {port}]")
     print("[Para finalizar, pressione CTRL+c ou rode um kill ou killall]")
 
-    # Create a log file
+    # Arquivo de log do servidor
     log = open("server.log", "w")
-    log.write(f"[{datetime.datetime.now()}] Servidor iniciado na porta {port}!\n")
+    log.write(f"[{datetime.datetime.now()}] server:open:{port}\n")
 
-    # Server waits for news connections
+    # Loop do servidor para novas conexões
     while True:
         try:
             clientSocket, addr = servaddr.accept()
             thread = threading.Thread(target = handle_new_client, args = (clientSocket, addr, log))
             thread.daemon = True
             thread.start()
-            log.write(f"[{datetime.datetime.now()}] Cliente {addr} conectado!\n")
+            log.write(f"[{datetime.datetime.now()}] client:connect:{addr}\n")
         except KeyboardInterrupt:
             break
 
-    # After all, we close the socket and the log
+    # Fecha o socket e adiciona no log
     print("Exiting the server")
-    log.write(f"[{datetime.datetime.now()}] Servidor finalizado!\n")
+    log.write(f"[{datetime.datetime.now()}] server:close\n")
     log.close()
     servaddr.close()
 
 
 ''' Server receives a heartbeat from clients every 10s '''
 def handle_new_client(clientSocket, addr, log):
-    # Timeout setted to detect an unexpected client disconnection
+    # Timeout para desconexão inesperada (heartbeat)
     clientSocket.settimeout(BEATWAIT)
-    exit = False
-    userLoggedIn = None
-    while not exit:
-        # Server communication with each client
+
+    stop = False
+    loggedUser = None
+
+    # Loop da conexão para receber comandos
+    while not stop:
         try:
             dataRecv = clientSocket.recv(MAXLINE).decode()
             if len(dataRecv) > 0:
                 entries = dataRecv.split()
-                command = entries[0]
-                if command == "adduser":
-                    if len(entries) == 3:
-                        username = entries[1]
-                        passwd = entries[2]
-                        if findUser(username):
-                            print("User already exists!")
-                        else:
-                            print("User created!")
-                            userCreated = User(username, passwd)
-                            with users_lock:
-                                users.append(userCreated)
-                elif command == "passwd":
-                    if len(entries) == 3:
-                        if userLoggedIn:
-                            print("New password setted!")
-                            old_passwd = entries[1]
-                            new_passwd = entries[2]
-                            userLoggedIn.setPasswd(old_passwd, new_passwd)
-                        else:
-                            print("User not logged in!")
-                elif command == "login":
-                    if len(entries) == 3:
-                        username = entries[1]
-                        passwd = entries[2]
-                        user = findUser(username)
-                        if user:
-                            if not user.logged_in:
-                                if passwd == user.passwd:
-                                    user.login(addr)
-                                    userLoggedIn = user
-                                else:
-                                    print("Password incorrect")
-                            else:
-                                print("User logged in on other device")
-                elif command == "leaders":
-                    score_table = ''
-                    with users_lock:
-                        for user in users:
-                            score_table += user.username + "   " + str(user.score) + "\n"
-                    if not score_table:
-                        score_table = "There isn't any users registered"
-                    clientSocket.send(score_table.encode())
-                elif command == "list":
-                    data = ''
-                    with users_lock:
-                        for user in users:
-                            if user.logged_in:
-                                data += user.username + "\n"
-                    if not data:
-                        data = "There isn't any users online"
-                    clientSocket.send(data.encode())
-                elif command == "begin":
-                    # TODO: Begin command
-                    print("DEBUG: Begin")
-                    if userLoggedIn:
-                        if len(entries) == 2:
-                            username = entries[1]
-                            oponent = findUser(username)
-                            if oponent:
-                                if oponent.logged_in:
-                                    print(oponent.addr, oponent.username) # DEBUG
-                                    clientSocket.send(str(oponent.addr).encode())
-                                else:
-                                    clientSocket.send('User not logged in'.encode())
-                            else:
-                                clientSocket.send('User not found'.encode())
-                        else:
-                            clientSocket.send('The second argument must be an user'.encode())
-                    else:
-                        clientSocket.send('You need to log in first!'.encode())
-                elif command == "send":
-                    print("TODO: Send")
-                elif command == "delay":
-                    print("TODO: Delay")
-                elif command ==  "end":
-                    print("TODO: End")
-                elif command == "logout":
-                    if userLoggedIn:
-                        userLoggedIn.logout()
-                        userLoggedIn = None
-                elif command == "exit":
-                    if userLoggedIn:
-                        userLoggedIn.logout()
-                    exit = True
-                elif command == "DISCONNECT":
-                    if userLoggedIn:
-                        userLoggedIn.logout()
-                    exit = True
+                loggedUser, response, stop = processCommand(log, loggedUser, addr, entries[0], entries[1:])
+                if response:
+                    clientSocket.send(response.encode('ASCII'))
+
         except socket.timeout:
-            # Heartbeat timeout (10s)
-            log.write(f"[{datetime.datetime.now()}] Cliente {addr} desconectado inesperadamente!\n")
-            exit = True
-    log.write(f"[{datetime.datetime.now()}] Cliente {addr} desconectado!\n")
+            # Timeout do heartbeat, desconecta cliente
+            log.write(f"[{datetime.datetime.now()}] client:connlost:{addr}\n")
+            stop = True
+
+    log.write(f"[{datetime.datetime.now()}] client:disconnect:{addr}\n")
     clientSocket.close()
 
+
+def processCommand(log, loggedUser, addr, command, args):
+    response = None
+
+    if command == "adduser":
+        if len(args) == 2:
+            username = args[0]
+            passwd = args[1]
+            if findUser(username):
+                print(f"User {username} already exists!")
+            else:
+                print(f"User {username} created!")
+                newUser = User(username, passwd)
+                with users_lock:
+                    users.append(newUser)
+                log.write(f"[{datetime.datetime.now()}] user:create:{username},{passwd}\n")
+
+    elif command == "passwd":
+        if len(args) == 2:
+            if loggedUser:
+                old_passwd = args[0]
+                new_passwd = args[1]
+                if loggedUser.setPasswd(old_passwd, new_passwd):
+                    print("New password set!")
+                    log.write(f"[{datetime.datetime.now()}] user:passwd:{loggedUser.username},{new_passwd}\n")
+                else:
+                    print("Password doesn't match!")
+            else:
+                print("User not logged in!")
+
+    elif command == "login":
+        if len(args) == 2:
+            username = args[0]
+            passwd = args[1]
+            user = findUser(username)
+            if user:
+                if not user.logged_in:
+                    if passwd == user.passwd:
+                        user.login(addr)
+                        loggedUser = user
+                        print(addr)
+                        log.write(f"[{datetime.datetime.now()}] user:login:{username},{addr}\n")
+                    else:
+                        print("Password incorrect")
+                else:
+                    print("User logged in on other device")
+
+    elif command == "leaders":
+        score_table = ''
+        with users_lock:
+            for user in users:
+                score_table += user.username + "   " + str(user.score) + "\n"
+        if not score_table:
+            score_table = "There isn't any users registered"
+        response = score_table
+
+    elif command == "list":
+        data = ''
+        with users_lock:
+            for user in users:
+                if user.logged_in:
+                    data += user.username + "\n"
+        if not data:
+            data = "There isn't any users online"
+        response = data
+
+    elif command == "begin":
+        if loggedUser:
+            if len(args) == 1:
+                username = args[0]
+                oponent = findUser(username)
+                if oponent:
+                    if oponent.logged_in:
+                        print(oponent.addr, oponent.username) # DEBUG
+                        response = f"{oponent.addr}"
+                    else:
+                        response = "error:User not online"
+                else:
+                    response = 'error:User not found'
+
+    elif command == "send":
+        print("TODO: Send")
+
+    elif command == "delay":
+        print("TODO: Delay")
+
+    elif command == "end":
+        print("TODO: End")
+
+    elif command == "logout":
+        if loggedUser:
+            loggedUser.logout()
+            loggedUser = None
+
+    elif command == "exit":
+        if loggedUser:
+            loggedUser.logout()
+        return (None, None, True)
+
+    elif command == "DISCONNECT":
+        if loggedUser:
+            loggedUser.logout()
+        return (None, None, True)
+
+    return (loggedUser, response, False)
 
 ''' Find an user by username
     -> return: None or user '''
