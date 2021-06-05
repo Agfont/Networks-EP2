@@ -7,7 +7,7 @@ def main():
     # python3 main.py <PORT>
     if(len(sys.argv) == 2):
         if (sys.argv[1].isdigit()): 
-            server.server(int(sys.argv[1]))
+            server.Server(int(sys.argv[1]))
         else:
             print('The second argument must be a port number')
 
