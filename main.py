@@ -14,7 +14,7 @@ def main():
     # python3 main.py <IP Adress> <PORT>
     elif(len(sys.argv) == 3):
         if (sys.argv[2].isdigit()): 
-            client.client(sys.argv[1], int(sys.argv[2]))
+            client.Client(sys.argv[1], int(sys.argv[2]))
         else:
             print('The third argument must be a port number')
         
