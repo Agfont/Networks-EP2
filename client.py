@@ -4,15 +4,14 @@ import time
 import threading
 from enum import Enum
 
+LISTENQ = 1
 MAXLINE = 4096
 BEATWAIT = 5
 
 class ClientState(Enum):
-    EXIT     = 0
-    PROMPT   = 1
-    PREGAME  = 2
-    INGAME   = 3
-    POSTGAME = 4
+    EXIT   = 0
+    PROMPT = 1
+    INGAME = 2
 
 class Client:
     def __init__(self, addr, port):
@@ -33,12 +32,20 @@ class Client:
         hb_thread.daemon = True
         hb_thread.start()
 
-        # Inicia espera por convites
-        recvInvites_thread = threading.Thread(target = self.p2p)
+        # Inicia socket de conexões P2P
+        addr = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        addr.bind(('', 0)) # Usa qualquer porta disponível
+        addr.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        addr.listen(LISTENQ)
+
+        self.listenPort = addr.getsockname()[1]
+
+        # Loop para novas conexões
+        recvInvites_thread = threading.Thread(target = self.inviteLoop, args = (addr,))
         recvInvites_thread.daemon = True
         recvInvites_thread.start()
 
-        self.state = ClientState(ClientState.PROMPT)
+        self.exit = ClientState(ClientState.PROMPT)
         while self.state != ClientState.EXIT:
             try:
                 entry = input("JogoDaVelha>")
@@ -47,114 +54,142 @@ class Client:
                     continue
                 self.processCommand(entry, entries[0], entries[1:])
             except KeyboardInterrupt:
-                self.serverSocket.send('DISCONNECT'.encode())
+                send(self.serverSocket, 'DISCONNECT')
                 self.serverSocket.close()
                 self.state = ClientState.EXIT
+
+        self.serverSocket.close()
+        return
 
 
     def processCommand(self, raw_msg, command, args):
         if command == "adduser":
             if len(args) != 2:
-                print("Invalid message, expected: adduser <usuario> <senha>")
+                print("Invalid message, expected: adduser <user> <passwd>")
                 return
-            self.send(raw_msg)
+            send(self.serverSocket, raw_msg)
+            checkAck(self.serverSocket)
 
         elif command == "passwd":
             if len(args) != 2:
-                print("Invalid message, expected: passwd <senha antiga> <senha nova>")
+                print("Invalid message, expected: passwd <old passwd> <new passwd>")
                 return
-            self.send(raw_msg)
+            send(self.serverSocket, raw_msg)
+            checkAck(self.serverSocket)
 
         elif command == "login":
             if len(args) != 2:
-                print("Invalid message, expected: login <usuario> <senha>")
+                print("Invalid message, expected: login <user> <passwd>")
                 return
-            self.send(raw_msg)
+            send(self.serverSocket, raw_msg + f" {self.listenPort}")
+            if (checkAck(self.serverSocket)):
+                self.username = args[0]
 
         elif command == "leaders":
-            self.send(raw_msg)
-            data = self.receive()
+            send(self.serverSocket, raw_msg)
+            data = receive(self.serverSocket)
             if len(data) > 0:
-                print("|----- Score Table -----|")
-                print("| User      | Score     |")
-                print("|-----------------------|")
+                print("|---------- Score Table ----------|")
+                print("| User                | Score     |")
+                print("|---------------------------------|")
                 print(data)
-                print("|-----------------------|")
+                print("|---------------------------------|")
 
         elif command == "list":
-            self.send(raw_msg)
-            data = self.receive()
+            send(self.serverSocket, raw_msg)
+            data = receive(self.serverSocket)
             if len(data) > 0:
-                print("|------- Players -------|")
+                print("|------------ Players ------------|")
                 print(data)
-                print("|-----------------------|")
+                print("|---------------------------------|")
 
         elif command == "begin":
             if len(args) != 1:
                 print("Invalid message, expected: begin <oponente>")
                 return
-            self.send(raw_msg)
-            entries = self.receive().split()
-            if len(entries) != 2:
-                print("Unexpected server response")
+            send(self.serverSocket, raw_msg)
+
+            data = receive(self.serverSocket)
+            if data[0:3] != 'ack':
+                print(data)
                 return
-            self.start_match(entries[0], entries[1])
+            entries = entries[1].split()
+            if len(entries) != 3:
+                print("Unexpected server response format")
+                return
+
+            username = args[0]
+            addr = entries[0]
+            port = entries[1]
+
+            self.oponentSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.oponentSocket.settimeout(10)
+            try:
+                self.serverSocket.connect((addr, port))
+            except socket.timeout:
+                print("Couldn't connect to oponent: connection timeout")
+                return
+            except socket.error:
+                print("Couldn't connect to oponent")
+                return
+
+            send(self.oponentSocket, f"invite {self.username}")
+            # TODO: Send invite
+            return
 
         elif command == "send":
-            print("TODO: Send")
+            print("No game to play")
 
         elif command == "delay":
-            print("TODO: Delay")
+            print("No oponent to measure delay")
 
         elif command ==  "end":
-            self.send(raw_msg)
+            print("No game to end")
 
         elif command == "logout":
-            self.send(raw_msg)
+            send(self.serverSocket, raw_msg)
+            if (checkAck(self.serverSocket)):
+                self.username = ""
 
         elif command == "exit":
             self.serverSocket.send('DISCONNECT'.encode())
-            self.serverSocket.close()
-            self.state = "exit"
-
-
-    def send(self, msg):
-        self.serverSocket.send(msg.encode('ASCII'))
-
-
-    def receive(self):
-        return self.serverSocket.recv(MAXLINE).decode()
+            if (self.state == ClientState.INGAME):
+                # TODO: end game
+                pass
+            self.state = ClientState.EXIT
 
 
     def heartbeat(self):
         while True:
-            msg = 'Thump!'.encode('ASCII')
-            self.serverSocket.send(msg)
+            send(self.serverSocket, "Thump!")
             time.sleep(BEATWAIT)
 
 
-    def start_match(self, username, addr):
-        print("DEBUG:")
-        print(username)
-        print(addr)
-        return
+    def inviteLoop(self, addr):
+        while True:
+            socket = addr.accept()
+
+            if self.state != ClientState.PROMPT:
+                print("opa kk")
+
+            # TODO: Handle receive invite
+            self.oponentSocket = socket
+            print('invite received')
+            send(socket, "end")
 
 
-    def p2p(self):
-        # while True:
-        #     msg, addr = socket.recvfrom(MAXLINE)
-        #     msg = msg.decode()
-        #     print(msg)
-        #     if len(msg) > 0:
-        #         entries = msg.split()
-        #         if entries == []:
-        #             continue
-        #         command = entries[0]
-        #         # TODO: Invites
-        #         if command == "INVITE":
-        #             print("DATA RECEIVED: ", msg)
-        #             msg = input("Do you want to play? (y/n)")
-        #             if msg == "y":
-        #                 socket.sendto("ACCEPTED".encode(), addr)
-        #             else:
-        #                 socket.sendto("DENIED".encode(), addr)
+
+def checkAck(socket):
+    data = receive(socket)
+    if (data == 'ack'):
+        return True
+    print(f"Server error: {data}")
+    return False
+
+
+def send(socket, msg):
+    socket.send(msg.encode('ASCII'))
+
+
+def receive(socket):
+    return socket.recv(MAXLINE).decode('ASCII')

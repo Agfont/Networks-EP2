@@ -18,9 +18,10 @@ class User:
             return True
         return False
 
-    def login(self, addr):
+    def login(self, addr, port):
         self.logged_in = True
         self.addr = addr
+        self.port = port
 
     def logout(self):
         self.logged_in = False

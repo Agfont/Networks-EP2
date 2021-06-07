@@ -81,95 +81,98 @@ class Connection:
         if command == "adduser":
             if len(args) != 2:
                 print("adduser: Invalid message format")
+                self.send("Invalid message format")
                 return
             username = args[0]
             passwd = args[1]
             with self.server.users_lock:
-                if username in self.server.users[username]:
+                if username in self.server.users:
                     print(f"adduser: User {username} already exists!")
-                else:
-                    print(f"adduser: User {username} created!")
-                    self.server.users[username] = User(username, passwd)
-                    self.server.log.write(f"[{datetime.datetime.now()}] user:create:{username},{passwd}\n")
+                    self.send(f"User {username} already exists!")
+                    return
+                print(f"adduser: User {username} created!")
+                self.server.users[username] = User(username, passwd)
+                self.server.log.write(f"[{datetime.datetime.now()}] user:create:{username},{passwd}\n")
+                self.send("ack")
 
         elif command == "passwd":
             if len(args) != 2:
                 print("passwd: Invalid message format")
+                self.send("Invalid message format")
                 return
-            if self.user:
-                old_passwd = args[0]
-                new_passwd = args[1]
-                if self.user.setPasswd(old_passwd, new_passwd):
-                    print("passwd: New password set!")
-                    self.server.log.write(f"[{datetime.datetime.now()}] user:passwd:{self.user.username},{new_passwd}\n")
-                else:
-                    print("passwd: Password doesn't match!")
-            else:
+            if not self.user:
                 print("passwd: User not logged in!")
+                self.send("User not logged in")
+                return
+            old_passwd = args[0]
+            new_passwd = args[1]
+            if not self.user.setPasswd(old_passwd, new_passwd):
+                print("passwd: Password doesn't match!")
+                self.send("Password doesn't match")
+                return
+            print("passwd: New password set!")
+            self.server.log.write(f"[{datetime.datetime.now()}] user:passwd:{self.user.username},{new_passwd}\n")
+            self.send("ack")
 
         elif command == "login":
-            if len(args) != 2:
+            if len(args) != 3:
                 print("login: Invalid message format")
+                self.send("Invalid message format")
                 return
             username = args[0]
             passwd = args[1]
-            if username in self.server.users:
-                user = self.server.users[username]
-                if not user.logged_in:
-                    if passwd == user.passwd:
-                        user.login(self.addr)
-                        self.user = user
-                        print(self.addr)
-                        print(f"login: User {username} logged in")
-                        self.server.log.write(f"[{datetime.datetime.now()}] user:login:{username},{self.addr}\n")
-                    else:
-                        print("login: Password incorrect")
-                else:
-                    print("login: User logged in on another device")
-            else:
+            port = args[2]
+            if username not in self.server.users:
                 print("login: User doesn't exist")
+                self.send("User doesn't exist")
+                return
+            user = self.server.users[username]
+            if user.logged_in:
+                print("login: User logged in on another device")
+                self.send("User logged in on another device")
+                return
+            if passwd != user.passwd:
+                print("login: Password incorrect")
+                self.send("Password incorrect")
+                return
+            user.login(self.addr, port)
+            self.user = user
+            print(self.addr)
+            print(f"login: User {username} logged in")
+            self.server.log.write(f"[{datetime.datetime.now()}] user:login:{username},{self.addr}\n")
+            self.send("ack")
 
         elif command == "leaders":
             score_table = ''
             with self.server.users_lock:
-                for _, user in self.server.users:
-                    score_table += user.username + "   " + str(user.score) + "\n"
+                for username, user in self.server.users.items():
+                    score_table += f"| {username:<20}| {user.score:<10}|\n"
             if not score_table:
-                score_table = "There isn't any users registered"
-            return score_table
+                score_table = "| No user registered              |\n"
+            self.send(score_table[:-1])
 
         elif command == "list":
-            data = ''
+            userList = ''
             with self.server.users_lock:
-                for _, user in self.server.users:
+                for username, user in self.server.users.items():
                     if user.logged_in:
-                        data += user.username + "\n"
-            if not data:
-                data = "There isn't any users online"
-            self.send(data)
+                        userList += f"| {user.username:<32}|\n"
+            if not userList:
+                userList = "| No user online                  |\n"
+            self.send(userList[:-1])
 
         elif command == "begin":
-            if self.user:
-                if len(args) == 1:
-                    username = args[0]
-                    oponent = self.server.users[username]
-                    if oponent:
-                        if oponent.logged_in:
-                            print(oponent.addr, oponent.username) # DEBUG
-                            self.send(f"{oponent.addr}")
-                        else:
-                            self.send("error:User not online")
-                    else:
-                        self.send('error:User not found')
-
-        elif command == "send":
-            print("TODO: Send")
-
-        elif command == "delay":
-            print("TODO: Delay")
-
-        elif command == "end":
-            print("TODO: End")
+            if len(args) != 1:
+                self.send("Invalid message")
+                return
+            if not self.user:
+                self.send("User not logged in")
+                return
+            username = args[0]
+            oponent = self.server.users[username]
+            if not oponent or not oponent.logged_in:
+                self.send("error:Invalid oponent")
+            self.send(f"ack {oponent.addr[0]} {oponent.port}")
 
         elif command == "logout":
             if self.user:
