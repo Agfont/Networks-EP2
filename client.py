@@ -3,6 +3,7 @@ import socket
 import time
 import threading
 from enum import Enum
+import errno
 
 LISTENQ = 1
 MAXLINE = 4096
@@ -28,7 +29,7 @@ class Client:
             exit(2)
 
         # Inicia heartbeat
-        hb_thread = threading.Thread(target = self.heartbeat)
+        hb_thread = threading.Thread(target = self.heartbeat, args=(addr, port))
         hb_thread.daemon = True
         hb_thread.start()
 
@@ -45,7 +46,7 @@ class Client:
         recvInvites_thread.daemon = True
         recvInvites_thread.start()
 
-        self.exit = ClientState(ClientState.PROMPT)
+        self.state = ClientState(ClientState.PROMPT)
         while self.state != ClientState.EXIT:
             try:
                 entry = input("JogoDaVelha>")
@@ -158,11 +159,30 @@ class Client:
                 pass
             self.state = ClientState.EXIT
 
-
-    def heartbeat(self):
+    ''' Client sends a heartbeat to the sever every 5s '''
+    def heartbeat(self, addr, port):
         while True:
-            send(self.serverSocket, "Thump!")
-            time.sleep(BEATWAIT)
+            try:
+                send(self.serverSocket, "Thump!")
+                time.sleep(BEATWAIT)
+            except IOError as e:
+                # Handle Broken pipe
+                if e.errno == errno.EPIPE:
+                    print("\nServer disconnected")
+                    self.serverSocket.close()
+                    # TODO: Reestablish connection with server
+                    '''reSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    reSocket.settimeout(180) # 3 min
+                    try:
+                        reSocket.connect((addr, port))
+                        hb_thread = threading.Thread(target = heartbeat,args = (reSocket,))
+                        hb_thread.daemon = True
+                        hb_thread.start()
+                    except socket.timeout:
+                        print("Client cannot reconnect to the server due timeout (3 min)!")
+                    except socket.error:
+                        print("Client cannot reconnect to the server!")'''
+                    break
 
 
     def inviteLoop(self, addr):
