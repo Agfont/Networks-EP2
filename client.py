@@ -35,20 +35,21 @@ class Client:
         addr.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         addr.listen(LISTENQ)
         self.listenPort = addr.getsockname()[1]
+        print(f"port: {addr.getsockname()[1]}")
 
         # Thread to receive invitations from other players
         recvInvites_thread = threading.Thread(target = self.inviteLoop, args = (addr,))
         recvInvites_thread.daemon = True
         recvInvites_thread.start()
-        
+
         # Prompt for user interaction
         self.state = ClientState(ClientState.PROMPT)
         while self.state != ClientState.EXIT:
             try:
                 entry = input("JogoDaVelha>")
-                entries = entry.split()
-                if entries == []:
+                if not entry:
                     continue
+                entries = entry.split()
                 self.processCommand(entry, entries[0], entries[1:])
             except KeyboardInterrupt:
                 send(self.serverSocket, 'DISCONNECT')
@@ -105,24 +106,25 @@ class Client:
                 print("Invalid message, expected: begin <oponente>")
                 return
             send(self.serverSocket, raw_msg)
-
             data = receive(self.serverSocket)
+
             if data[0:3] != 'ack':
                 print(data)
                 return
-            entries = data[1].split()
+            entries = data.split()
             if len(entries) != 3:
                 print("Unexpected server response format")
                 return
 
             username = args[0]
-            addr = entries[0]
-            port = entries[1]
+            addr = entries[1]
+            port = int(entries[2])
 
             self.oponentSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.oponentSocket.settimeout(10)
+
             try:
-                self.serverSocket.connect((addr, port))
+                self.oponentSocket.connect((addr, port))
             except socket.timeout:
                 print("Couldn't connect to oponent: connection timeout")
                 return
@@ -130,12 +132,16 @@ class Client:
                 print("Couldn't connect to oponent")
                 return
 
-            send(self.oponentSocket, f"invite {self.username}")
-            # TODO: Send invite
+            try:
+                send(self.oponentSocket, f"invite {self.username}")
+                print(f"invite: {receive(self.oponentSocket)}")
+            except socket.timeout:
+                print("Oponnent: connection timeout")
+                return
             return
 
         elif command == "send":
-            print("No game to play")
+            send(self.oponentSocket, raw_msg)
 
         elif command == "delay":
             print("No oponent to measure delay")
@@ -154,6 +160,12 @@ class Client:
                 # TODO: end game
                 pass
             self.state = ClientState.EXIT
+
+        # TODO: verificar latencia
+        # lista[3]
+        # remove first           [1, 2, 3] -> [2, 3]
+        # lista.append(latencia) [2, 3] -> [2, 3, 4]
+
 
     ''' Client sends a heartbeat to the sever every 5s '''
     def heartbeat(self, addr, port):
@@ -189,25 +201,31 @@ class Client:
 
     def inviteLoop(self, addr):
         while True:
-            socket = addr.accept()
+            sock, _ = addr.accept()
+            invite = receive(sock)
 
             if self.state != ClientState.PROMPT:
-                print("opa kk")
+                send(sock, "busy")
+                sock.close()
+                continue
 
-            # TODO: Handle receive invite
-            self.oponentSocket = socket
-            print('invite received')
-            send(socket, "end")
+            entries = invite.split()
+            if (entries[0] != 'invite'):
+                send(sock, "end")
 
-def checkAck(socket):
-    data = receive(socket)
+            self.oponentSocket = sock
+            send(self.oponentSocket, "end")
+
+
+def checkAck(sock):
+    data = receive(sock)
     if (data == 'ack'):
         return True
     print(f"Server error: {data}")
     return False
 
-def send(socket, msg):
-    socket.send(msg.encode('ASCII'))
+def send(sock, msg):
+    sock.send(msg.encode('ASCII'))
 
-def receive(socket):
-    return socket.recv(MAXLINE).decode('ASCII')
+def receive(sock):
+    return sock.recv(MAXLINE).decode('ASCII')

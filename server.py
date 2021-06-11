@@ -46,7 +46,7 @@ class Server:
                 self.users[usr] = user
         else:
             self.df = pd.DataFrame(columns = ['User', 'Password', 'Score'])
-        
+
         # 3) Resume games and privileges
 
         # rebuild.resume_games()
@@ -68,4 +68,3 @@ class Server:
         print("Exiting the server")
         self.log.write(f"[{datetime.datetime.now()}] server:close:({self.ip_addr}, {port})\n")
         self.log.close()
-        servaddr.close()
