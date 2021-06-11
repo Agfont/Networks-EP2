@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 import socket
-import time
 import threading
-from enum import Enum
 import errno
+import time
+from enum import Enum
 
 LISTENQ = 1
 MAXLINE = 4096
@@ -17,35 +17,31 @@ class ClientState(Enum):
 class Client:
     def __init__(self, addr, port):
         self.serverSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.serverSocket.settimeout(10)
 
         try:
             self.serverSocket.connect((addr, port))
-        except socket.timeout:
-            print("Client cannot connect to the server due timeout (10s)!")
-            exit(1)
         except socket.error:
             print("Client cannot connect to the server!")
-            exit(2)
+            exit(1)
 
-        # Inicia heartbeat
+        # Thread to send heartbeats to the server
         hb_thread = threading.Thread(target = self.heartbeat, args=(addr, port))
         hb_thread.daemon = True
         hb_thread.start()
 
-        # Inicia socket de conexões P2P
+        # Start socket for P2P connection
         addr = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         addr.bind(('', 0)) # Usa qualquer porta disponível
         addr.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         addr.listen(LISTENQ)
-
         self.listenPort = addr.getsockname()[1]
 
-        # Loop para novas conexões
+        # Thread to receive invitations from other players
         recvInvites_thread = threading.Thread(target = self.inviteLoop, args = (addr,))
         recvInvites_thread.daemon = True
         recvInvites_thread.start()
-
+        
+        # Prompt for user interaction
         self.state = ClientState(ClientState.PROMPT)
         while self.state != ClientState.EXIT:
             try:
@@ -62,7 +58,7 @@ class Client:
         self.serverSocket.close()
         return
 
-
+    ''' Parse and handle commands typed by users on prompt '''
     def processCommand(self, raw_msg, command, args):
         if command == "adduser":
             if len(args) != 2:
@@ -114,7 +110,7 @@ class Client:
             if data[0:3] != 'ack':
                 print(data)
                 return
-            entries = entries[1].split()
+            entries = data[1].split()
             if len(entries) != 3:
                 print("Unexpected server response format")
                 return
@@ -161,29 +157,35 @@ class Client:
 
     ''' Client sends a heartbeat to the sever every 5s '''
     def heartbeat(self, addr, port):
-        while True:
+        reconnecting = False
+        while not reconnecting:
             try:
                 send(self.serverSocket, "Thump!")
                 time.sleep(BEATWAIT)
             except IOError as e:
-                # Handle Broken pipe
+                reconnecting = True
+                # Server disconnected: Handle Broken pipe
                 if e.errno == errno.EPIPE:
-                    print("\nServer disconnected")
+                    print("\n-- Server disconnected")
                     self.serverSocket.close()
-                    # TODO: Reestablish connection with server
-                    '''reSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                    reSocket.settimeout(180) # 3 min
-                    try:
-                        reSocket.connect((addr, port))
-                        hb_thread = threading.Thread(target = heartbeat,args = (reSocket,))
-                        hb_thread.daemon = True
-                        hb_thread.start()
-                    except socket.timeout:
-                        print("Client cannot reconnect to the server due timeout (3 min)!")
-                    except socket.error:
-                        print("Client cannot reconnect to the server!")'''
-                    break
+                    self.serverSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    count = 0
 
+                    # Reestablishing connection with server
+                    while True:
+                        time.sleep(1)
+                        count += 1
+                        try:
+                            self.serverSocket.connect((addr, port))
+                            # TODO: Receive heartbeat and talk with server about games runing
+                            print("-- Connection reestablished")
+                            reconnecting = False
+                            break
+                        except socket.error:
+                            print(f"-- Client trying to reconnect to the server: {count}s...")
+                        if count == 5:
+                            print(f"-- Client cannot reconnect to the server due timeout ({count}s)!")
+                            break
 
     def inviteLoop(self, addr):
         while True:
@@ -197,8 +199,6 @@ class Client:
             print('invite received')
             send(socket, "end")
 
-
-
 def checkAck(socket):
     data = receive(socket)
     if (data == 'ack'):
@@ -206,10 +206,8 @@ def checkAck(socket):
     print(f"Server error: {data}")
     return False
 
-
 def send(socket, msg):
     socket.send(msg.encode('ASCII'))
-
 
 def receive(socket):
     return socket.recv(MAXLINE).decode('ASCII')

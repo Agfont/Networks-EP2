@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-''' User information'''
+''' Class to store user information'''
 class User:
     def __init__(self, username, passwd):
         self.username = username
