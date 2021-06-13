@@ -4,6 +4,7 @@ import threading
 import errno
 import time
 from enum import Enum
+from game import Game, MatchState
 
 LISTENQ = 1
 MAXLINE = 4096
@@ -47,6 +48,9 @@ class Client:
         while self.state != ClientState.EXIT:
             try:
                 entry = input("JogoDaVelha>")
+                if (self.state == ClientState.INGAME):
+                    self.processInvite(entry)
+                    continue
                 if not entry:
                     continue
                 entries = entry.split()
@@ -103,7 +107,10 @@ class Client:
 
         elif command == "begin":
             if len(args) != 1:
-                print("Invalid message, expected: begin <oponente>")
+                print("Invalid message, expected: begin <opponente>")
+                return
+            if args[0] == self.username:
+                print("You can't send an invite to yourself")
                 return
             send(self.serverSocket, raw_msg)
             data = receive(self.serverSocket)
@@ -120,31 +127,34 @@ class Client:
             addr = entries[1]
             port = int(entries[2])
 
-            self.oponentSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.oponentSocket.settimeout(10)
+            self.opponentSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.opponentSocket.settimeout(180)
 
             try:
-                self.oponentSocket.connect((addr, port))
+                self.opponentSocket.connect((addr, port))
             except socket.timeout:
-                print("Couldn't connect to oponent: connection timeout")
+                print("Couldn't connect to opponent: connection timeout")
                 return
             except socket.error:
-                print("Couldn't connect to oponent")
+                print("Couldn't connect to opponent")
                 return
 
-            try:
-                send(self.oponentSocket, f"invite {self.username}")
-                print(f"invite: {receive(self.oponentSocket)}")
-            except socket.timeout:
-                print("Oponnent: connection timeout")
+            send(self.opponentSocket, f"invite {self.username}")
+            msg = receive(self.opponentSocket)
+            if (msg != 'acc'):
+                print('Opponent refused!')
+                self.opponentSocket.close()
+                self.opponentSocket = None
                 return
-            return
+            self.state = ClientState.INGAME
+            state = self.beginGame(True);
+            send(self.serverSocket, f"matchfin {state} {self.username} {username}")
 
         elif command == "send":
-            send(self.oponentSocket, raw_msg)
+            print("Not in match")
 
         elif command == "delay":
-            print("No oponent to measure delay")
+            print("No opponent to measure delay")
 
         elif command ==  "end":
             print("No game to end")
@@ -156,16 +166,25 @@ class Client:
 
         elif command == "exit":
             self.serverSocket.send('DISCONNECT'.encode())
-            if (self.state == ClientState.INGAME):
-                # TODO: end game
-                pass
             self.state = ClientState.EXIT
 
-        # TODO: verificar latencia
-        # lista[3]
-        # remove first           [1, 2, 3] -> [2, 3]
-        # lista.append(latencia) [2, 3] -> [2, 3, 4]
+    def processInvite(self, entry):
+        if (entry != 'y'):
+            send(self.opponentSocket, 'nacc')
+            self.state = ClientState.PROMPT
+            self.opponentSocket.close()
+            self.opponentSocket = None
+            return
+        send(self.opponentSocket, 'acc')
+        self.beginGame()
 
+    def beginGame(self, willBegin = False):
+        game = Game(self.opponentSocket, willBegin)
+        state = game.run()
+        self.opponentSocket.close()
+        self.opponentSocket = None
+        self.state = ClientState.PROMPT
+        return state
 
     ''' Client sends a heartbeat to the sever every 5s '''
     def heartbeat(self, addr, port):
@@ -205,16 +224,18 @@ class Client:
             invite = receive(sock)
 
             if self.state != ClientState.PROMPT:
-                send(sock, "busy")
+                send(sock, "nacc")
                 sock.close()
                 continue
 
             entries = invite.split()
             if (entries[0] != 'invite'):
-                send(sock, "end")
+                send(sock, "nacc")
 
-            self.oponentSocket = sock
-            send(self.oponentSocket, "end")
+            self.state = ClientState.INGAME
+            self.opponentSocket = sock
+            print()
+            print(f"{entries[1]} is inviting you to a match, accept invite(y/N):", end=" ", flush=True)
 
 
 def checkAck(sock):

@@ -2,6 +2,7 @@
 import socket
 import datetime
 from user import User
+from game import MatchState
 
 MAXLINE = 4096
 BEATWAIT = 10
@@ -51,7 +52,7 @@ class Connection:
                 print(f"adduser: User {username} created!")
                 self.server.users[username] = User(username, passwd)
                 self.send("ack")
-            
+
                 # Add user to our database
                 entry = {'User' : username,
                          'Password' : passwd,
@@ -141,10 +142,36 @@ class Connection:
                 self.send("User not logged in")
                 return
             username = args[0]
-            oponent = self.server.users[username]
-            if not oponent or not oponent.logged_in:
-                self.send("error:Invalid oponent")
-            self.send(f"ack {oponent.addr[0]} {oponent.port}")
+            if username not in self.server.users:
+                self.send("Invalid opponent")
+                return
+            opponent = self.server.users[username]
+            if not opponent or not opponent.logged_in:
+                self.send("Invalid opponent")
+                return
+            self.send(f"ack {opponent.addr[0]} {opponent.port}")
+
+        elif command == "matchfin":
+            if len(args) != 3:
+                return
+
+            print(command)
+            print(args)
+
+            matchState = MatchState(int(args[0]))
+            host_username = args[1]
+            guest_username = args[2]
+
+            # TODO: checar se ainda estamos usando atributo score na classe User
+            if matchState == MatchState.DRAW:
+                self.server.df.loc[self.server.df['User'] == host_username, 'Score'] += 1
+                self.server.df.loc[self.server.df['User'] == guest_username, 'Score'] += 1
+            elif matchState == MatchState.WON:
+                self.server.df.loc[self.server.df['User'] == host_username, 'Score'] += 2
+            elif matchState == MatchState.LOST:
+                self.server.df.loc[self.server.df['User'] == guest_username, 'Score'] += 2
+
+            self.server.df.to_csv(DATABASE, index=False)
 
         elif command == "logout":
             if self.user:
