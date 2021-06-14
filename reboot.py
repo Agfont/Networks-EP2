@@ -84,16 +84,16 @@ class RebuildServer:
         return self.games.keys()
 
     ''' Restablish connection with each client connected '''
-    def restablish_connections(self, servaddr, server):
+    def restablish_connections(self, server):
         for dict in self.clients_connected():
-            clientSocket, addr = servaddr.accept()
+            clientSocket, addr = server.servaddr.accept()
             thread = threading.Thread(target = Connection, args = (clientSocket, addr, server))
             thread.daemon = True
             thread.start()
             server.log.write(f"[{datetime.datetime.now()}] client:connect:{addr}\n")
 
     ''' Resume all games running, sending heartbeats to players '''
-    def resume_games(self):
+    def resume_games(self, server):
         list_games = self.games_running()
         # check if has any games running
         if len(list_games) > 0:

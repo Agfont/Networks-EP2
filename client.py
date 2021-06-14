@@ -4,7 +4,7 @@ import threading
 import errno
 import time
 from enum import Enum
-from game import Game, MatchState
+from game import Game
 
 LISTENQ = 1
 MAXLINE = 4096
@@ -18,7 +18,6 @@ class ClientState(Enum):
 class Client:
     def __init__(self, addr, port):
         self.serverSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
         try:
             self.serverSocket.connect((addr, port))
         except socket.error:
@@ -92,8 +91,6 @@ class Client:
             data = receive(self.serverSocket)
             if len(data) > 0:
                 print("|---------- Score Table ----------|")
-                print("| User                | Score     |")
-                print("|---------------------------------|")
                 print(data)
                 print("|---------------------------------|")
 
@@ -107,14 +104,13 @@ class Client:
 
         elif command == "begin":
             if len(args) != 1:
-                print("Invalid message, expected: begin <opponente>")
+                print("Invalid message, expected: begin <opponent>")
                 return
             if args[0] == self.username:
                 print("You can't send an invite to yourself")
                 return
             send(self.serverSocket, raw_msg)
             data = receive(self.serverSocket)
-
             if data[0:3] != 'ack':
                 print(data)
                 return
@@ -122,23 +118,22 @@ class Client:
             if len(entries) != 3:
                 print("Unexpected server response format")
                 return
-
             username = args[0]
             addr = entries[1]
             port = int(entries[2])
 
             self.opponentSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.opponentSocket.settimeout(180)
-
+            self.opponentSocket.settimeout(180) # 3 minutes to connect to opponent
             try:
                 self.opponentSocket.connect((addr, port))
             except socket.timeout:
-                print("Couldn't connect to opponent: connection timeout")
+                print("Couldn't connect to opponent: connection timeout (3 min)")
                 return
             except socket.error:
                 print("Couldn't connect to opponent")
                 return
 
+            # Connection established with opponent
             send(self.opponentSocket, f"invite {self.username}")
             msg = receive(self.opponentSocket)
             if (msg != 'acc'):
@@ -146,9 +141,10 @@ class Client:
                 self.opponentSocket.close()
                 self.opponentSocket = None
                 return
+            send(self.serverSocket, f"matchinit {self.username} ({addr},{port}) {username}")
             self.state = ClientState.INGAME
-            state = self.beginGame(True);
-            send(self.serverSocket, f"matchfin {state} {self.username} {username}")
+            state = self.beginGame(True)
+            send(self.serverSocket, f"matchfin {state} {self.username} ({addr},{port}) {username}")
 
         elif command == "send":
             print("Not in match")
@@ -168,6 +164,7 @@ class Client:
             self.serverSocket.send('DISCONNECT'.encode())
             self.state = ClientState.EXIT
 
+    ''' Process invite answered by opponent '''
     def processInvite(self, entry):
         if (entry != 'y'):
             send(self.opponentSocket, 'nacc')
@@ -178,6 +175,7 @@ class Client:
         send(self.opponentSocket, 'acc')
         self.beginGame()
 
+    ''' Start a match, willBegin parameter controls which player will start '''
     def beginGame(self, willBegin = False):
         game = Game(self.opponentSocket, willBegin)
         state = game.run()
@@ -218,6 +216,7 @@ class Client:
                             print(f"-- Client cannot reconnect to the server due timeout ({count}s)!")
                             break
 
+    ''' Loop for receive invitations from other players, except if the user is playing '''
     def inviteLoop(self, addr):
         while True:
             sock, _ = addr.accept()

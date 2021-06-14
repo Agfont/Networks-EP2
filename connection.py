@@ -18,10 +18,10 @@ class Connection:
         self.stop = False
         self.exit = 'purposeful'
 
-        # Timeout para desconexão inesperada (heartbeat)
+        # Timeout to detect unexpected disconnection (Heartbeat)
         self.socket.settimeout(BEATWAIT)
 
-        # Loop da conexão para receber comandos
+        # Loop for client communication
         while not self.stop:
             try:
                 dataRecv = self.receive()
@@ -29,11 +29,10 @@ class Connection:
                     entries = dataRecv.split()
                     self.processCommand(entries[0], entries[1:])
             except socket.timeout:
-                # Timeout do heartbeat, desconecta cliente
                 self.stop = True
                 self.exit = 'unexpected'
 
-        self.server.log.write(f"[{datetime.datetime.now()}] client:disconnect:{addr}:{self.exit}\n")
+        self.server.log.write(f"[{datetime.datetime.now()}] client:disconnect:{self.addr}:{self.exit}\n")
         self.socket.close()
 
     def processCommand(self, command, args):
@@ -50,10 +49,10 @@ class Connection:
                     self.send(f"User {username} already exists!")
                     return
                 print(f"adduser: User {username} created!")
-                self.server.users[username] = User(username, passwd)
+                self.server.users[username] = User(username)
                 self.send("ack")
 
-                # Add user to our database
+                # Update database
                 entry = {'User' : username,
                          'Password' : passwd,
                          'Score':   0}
@@ -71,14 +70,14 @@ class Connection:
                 return
             old_passwd = args[0]
             new_passwd = args[1]
-            if not self.user.setPasswd(old_passwd, new_passwd):
+            if self.server.df.loc[self.server.df['User'] == self.user.username, 'Password'] != old_passwd:
                 print("passwd: Password doesn't match!")
                 self.send("Password doesn't match")
                 return
             print("passwd: New password set!")
             self.send("ack")
 
-            # Set new passwd on our database
+            # Update database
             self.server.df.loc[self.server.df['User'] == self.user.username, 'Password'] = new_passwd
             self.server.df.to_csv(DATABASE, index=False)
 
@@ -102,7 +101,7 @@ class Connection:
                 self.send("User logged in on your or other device")
                 self.server.log.write(f"[{datetime.datetime.now()}] client:login:{self.addr}:{username}:{status}\n")
                 return
-            if passwd != user.passwd:
+            if self.server.df.loc[self.server.df['User'] == user.username, 'Password'].item() != int(passwd):
                 print("login: Password incorrect")
                 self.send("Password incorrect")
                 self.server.log.write(f"[{datetime.datetime.now()}] client:login:{self.addr}:{username}:{status}\n")
@@ -110,19 +109,12 @@ class Connection:
             user.login(self.addr, port)
             self.user = user
             status = 'success'
-            print(self.addr)
             print(f"login: User {username} logged in")
             self.server.log.write(f"[{datetime.datetime.now()}] client:login:{self.addr}:{username}:{status}\n")
             self.send("ack")
 
         elif command == "leaders":
-            score_table = ''
-            with self.server.users_lock:
-                for username, user in self.server.users.items():
-                    score_table += f"| {username:<20}| {user.score:<10}|\n"
-            if not score_table:
-                score_table = "| No user registered              |\n"
-            self.send(score_table[:-1])
+            self.send(self.server.df.loc[:, ['User', 'Score']].to_string())
 
         elif command == "list":
             userList = ''
@@ -151,32 +143,44 @@ class Connection:
                 return
             self.send(f"ack {opponent.addr[0]} {opponent.port}")
 
+        elif command == "matchinit":
+            if len(args) != 3:
+                return
+            host = args[0]
+            guest_addr = args[1]
+            guest = args[2]
+
+            # First is 'X' (who sent the invite), second is 'O' (who received the invite)
+            self.server.log.write(f"[{datetime.datetime.now()}] client:begin:{self.addr}:{host}:{guest_addr}:{guest}\n")
+
         elif command == "matchfin":
             if len(args) != 3:
                 return
-
-            print(command)
-            print(args)
-
             matchState = MatchState(int(args[0]))
-            host_username = args[1]
-            guest_username = args[2]
+            host = args[1]
+            guest_addr = args[2]
+            guest = args[3]
+            winner = 'DRAW'
 
-            # TODO: checar se ainda estamos usando atributo score na classe User
             if matchState == MatchState.DRAW:
-                self.server.df.loc[self.server.df['User'] == host_username, 'Score'] += 1
-                self.server.df.loc[self.server.df['User'] == guest_username, 'Score'] += 1
+                self.server.df.loc[self.server.df['User'] == host, 'Score'] += 1
+                self.server.df.loc[self.server.df['User'] == guest, 'Score'] += 1
             elif matchState == MatchState.WON:
-                self.server.df.loc[self.server.df['User'] == host_username, 'Score'] += 2
+                self.server.df.loc[self.server.df['User'] == host, 'Score'] += 2
+                winner = host
             elif matchState == MatchState.LOST:
-                self.server.df.loc[self.server.df['User'] == guest_username, 'Score'] += 2
+                self.server.df.loc[self.server.df['User'] == guest, 'Score'] += 2
+                winner = guest
 
             self.server.df.to_csv(DATABASE, index=False)
+            self.server.log.write(f"[{datetime.datetime.now()}] client:end:{self.addr}:{host}:{guest_addr}:{guest}:{winner}\n")
 
         elif command == "logout":
             if self.user:
                 self.user.logout()
                 self.user = None
+                self.send("ack")
+            self.send("User not logged in")
 
         elif command == "exit":
             if self.user:

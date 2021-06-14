@@ -14,49 +14,44 @@ DATABASE = 'data.csv'
 
 class Server:
     def __init__(self, port):
-        servaddr = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        servaddr.bind(('0.0.0.0', port))
-        servaddr.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        servaddr.listen(LISTENQ)
-
-        # Server information (IP)
+        # Socket server inicialization
+        self.servaddr = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.servaddr.bind(('0.0.0.0', port))
+        self.servaddr.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.servaddr.listen(LISTENQ)
         self.ip_addr = socket.gethostbyname(socket.gethostname())
 
-        # 1) Parse Log
+        # Rebuild server state after crash (if needed) 
         rebuild = RebuildServer()
         rebuild.parseLog(LOG)
-
-        # Arquivo de log do servidor
+        
         self.log = open(LOG, "w")
         self.log.write(f"[{datetime.datetime.now()}] server:open:({self.ip_addr}, {port}):{rebuild.exit}\n")
 
-        # 2) Restablish connections
-        rebuild.restablish_connections(servaddr, self)
+        # 1) Restablish connections
+        rebuild.restablish_connections(self)
 
-        # TODO: Recuperar users da DATABASE e atualizar variáveis
+        # 2) Charge users on memory with a dictionary
         self.users = {}
         self.users_lock = threading.Lock()
-
         if os.path.isfile(DATABASE):
             self.df = pd.read_csv(DATABASE)
-            table = self.df[['User', 'Password', 'Score']].values
-            for usr, pwd, score in table:
-                user = User(usr, pwd)
-                user.updateScore(score)
+            table = self.df['User']
+            for usr in table:
+                user = User(usr)
                 self.users[usr] = user
         else:
             self.df = pd.DataFrame(columns = ['User', 'Password', 'Score'])
 
         # 3) Resume games and privileges
-
-        # rebuild.resume_games()
+        # TODO: rebuild.resume_games()
 
         print(f"[Servidor no ar. Aguardando conexões na porta {port}]")
         print("[Para finalizar, pressione CTRL+c ou rode um kill ou killall]")
         # Loop that waits for new connections
         while True:
             try:
-                clientSocket, addr = servaddr.accept()
+                clientSocket, addr = self.servaddr.accept()
                 thread = threading.Thread(target = Connection, args = (clientSocket, addr, self))
                 thread.daemon = True
                 thread.start()
