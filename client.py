@@ -55,7 +55,10 @@ class Client:
                 entries = entry.split()
                 self.processCommand(entry, entries[0], entries[1:])
             except KeyboardInterrupt:
-                send(self.serverSocket, 'DISCONNECT')
+                try:
+                    send(self.serverSocket, 'DISCONNECT')
+                except IOError:
+                    pass
                 self.serverSocket.close()
                 self.state = ClientState.EXIT
 
@@ -189,7 +192,7 @@ class Client:
         reconnecting = False
         while not reconnecting:
             try:
-                send(self.serverSocket, "Thump!")
+                send(self.serverSocket, "Thump!", True)
                 time.sleep(BEATWAIT)
             except IOError as e:
                 # Server disconnected: Handle Broken pipe
@@ -216,7 +219,8 @@ class Client:
                         count += 1
                         if count == 5:
                             print(f"-- Client cannot reconnect to the server due timeout ({count}s)!")
-                            print(f"-- You are playing for fun!!!")
+                            if self.state == ClientState.INGAME:
+                                print(f"-- You are playing for fun!!!")
                             break
 
     ''' Loop for receive invitations from other players. If user is in game, reject automatically. '''
@@ -244,11 +248,17 @@ def checkAck(sock):
     data = receive(sock)
     if (data == 'ack'):
         return True
+    elif data == '': data = "Broken Pipe"
     print(f"Server error: {data}")
     return False
 
-def send(sock, msg):
-    sock.send(msg.encode('ASCII'))
+def send(sock, msg, force=False):
+    if not force:
+        try:
+            sock.send(msg.encode('ASCII'))
+        except IOError:
+            return
+    else: sock.send(msg.encode('ASCII'))
 
 def receive(sock):
     return sock.recv(MAXLINE).decode('ASCII')

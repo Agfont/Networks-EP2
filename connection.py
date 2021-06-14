@@ -86,6 +86,9 @@ class Connection:
                 print("login: Invalid message format")
                 self.send("Invalid message format")
                 return
+            if self.user:
+                self.send("You are already logged in")
+                return
             username = args[0]
             passwd = args[1]
             port = args[2]
