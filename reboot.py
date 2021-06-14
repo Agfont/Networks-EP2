@@ -91,11 +91,3 @@ class RebuildServer:
             thread.daemon = True
             thread.start()
             server.log.write(f"[{datetime.datetime.now()}] client:connect:{addr}\n")
-
-    ''' Resume all games running, sending heartbeats to players '''
-    def resume_games(self, server):
-        list_games = self.games_running()
-        # check if has any games running
-        if len(list_games) > 0:
-            # TODO: send heartbeats to players
-            pass

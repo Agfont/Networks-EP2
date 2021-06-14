@@ -192,8 +192,8 @@ class Client:
                 send(self.serverSocket, "Thump!")
                 time.sleep(BEATWAIT)
             except IOError as e:
-                reconnecting = True
                 # Server disconnected: Handle Broken pipe
+                reconnecting = True
                 if e.errno == errno.EPIPE:
                     print("\n-- Server disconnected")
                     self.serverSocket.close()
@@ -202,21 +202,24 @@ class Client:
 
                     # Reestablishing connection with server
                     while True:
-                        time.sleep(1)
-                        count += 1
                         try:
                             self.serverSocket.connect((addr, port))
-                            # TODO: Receive heartbeat and talk with server about games runing
-                            print("-- Connection reestablished")
+                            print("-- Connection reestablished with server!")
+                            if self.state == ClientState.PROMPT:
+                                print("JogoDaVelha>", end='', flush=True)
                             reconnecting = False
                             break
                         except socket.error:
-                            print(f"-- Client trying to reconnect to the server: {count}s...")
+                            pass
+                            # print(f"-- Client trying to reconnect to the server: {count}s...")
+                        time.sleep(1)
+                        count += 1
                         if count == 5:
                             print(f"-- Client cannot reconnect to the server due timeout ({count}s)!")
+                            print(f"-- You are playing for fun!!!")
                             break
 
-    ''' Loop for receive invitations from other players, except if the user is playing '''
+    ''' Loop for receive invitations from other players. If user is in game, reject automatically. '''
     def inviteLoop(self, addr):
         while True:
             sock, _ = addr.accept()
