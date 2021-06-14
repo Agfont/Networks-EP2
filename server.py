@@ -29,7 +29,9 @@ class Server:
         self.log.write(f"[{datetime.datetime.now()}] server:open:({self.ip_addr}, {port}):{rebuild.exit}\n")
 
         # 1) Restablish connections
+        self.servaddr.settimeout(5) # Limit to 5 seconds for reconnect to each client
         rebuild.restablish_connections(self)
+        self.servaddr.settimeout(None) # Clear timeout
 
         # 2) Charge users on memory with a dictionary
         self.users = {}

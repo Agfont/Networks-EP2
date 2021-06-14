@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import threading
 import datetime
+import socket
 from connection import Connection
 from enum import Enum
 
@@ -85,9 +86,14 @@ class RebuildServer:
 
     ''' Restablish connection with each client connected '''
     def restablish_connections(self, server):
-        for dict in self.clients_connected():
-            clientSocket, addr = server.servaddr.accept()
-            thread = threading.Thread(target = Connection, args = (clientSocket, addr, server))
-            thread.daemon = True
-            thread.start()
-            server.log.write(f"[{datetime.datetime.now()}] client:connect:{addr}\n")
+        for client in self.clients_connected():
+            try:
+                clientSocket, addr = server.servaddr.accept()
+                thread = threading.Thread(target = Connection, args = (clientSocket, addr, server))
+                thread.daemon = True
+                thread.start()
+                server.log.write(f"[{datetime.datetime.now()}] client:connect:{addr}\n")
+            except socket.timeout:
+                print(f"Client {client} cannot reconnect to the server due timeout (5s)!")
+            except socket.error:
+                print(f"Client {client} cannot reconnect to the server!")
