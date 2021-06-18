@@ -10,6 +10,7 @@ extra_len = {
     'open' : 4 - FIXED_HEADER,
     'connect' : 3 - FIXED_HEADER,
     'login' : 5 - FIXED_HEADER,
+    'logout' : 4 - FIXED_HEADER,
     'disconnect' : 4 - FIXED_HEADER,
     'begin' : 6 - FIXED_HEADER,
     'end' : 7 - FIXED_HEADER,
@@ -47,6 +48,12 @@ class RebuildServer:
                     status = status.rstrip("\n")
                     self.clients[addr] = name
                     # print('Login: ', side, command, addr, name, status)
+                elif command == 'logout':
+                    extra = extra.split(":", maxsplit=extra_len['logout'])
+                    addr, name = extra
+                    name = name.rstrip("\n")
+                    self.clients[addr] = None
+                    # print('Logout: ', side, command, addr, name)
                 elif command == 'disconnect':
                     extra = extra.split(":", maxsplit=extra_len['disconnect'])
                     addr, status = extra
@@ -74,11 +81,7 @@ class RebuildServer:
 
     ''' Return a list with all connected clients '''
     def clients_connected(self):
-        return self.clients.keys()
-
-    ''' Return a list with users online (all logged in clients) '''
-    def users_connected(self):
-        return [v for v in self.clients.values() if (v != 0)]
+        return self.clients.items()
 
     ''' Return a list with all games running '''
     def games_running(self):
@@ -86,14 +89,18 @@ class RebuildServer:
 
     ''' Restablish connection with each client connected '''
     def restablish_connections(self, server):
-        for client in self.clients_connected():
+        for address, username in self.clients_connected():
             try:
                 clientSocket, addr = server.servaddr.accept()
-                thread = threading.Thread(target = Connection, args = (clientSocket, addr, server))
+                if username == None: 
+                    thread = threading.Thread(target = Connection, args = (clientSocket, addr, server))
+                else:
+                    user = server.users[username]
+                    thread = threading.Thread(target = Connection, args = (clientSocket, addr, server, user))
                 thread.daemon = True
                 thread.start()
                 server.log.write(f"[{datetime.datetime.now()}] client:connect:{addr}\n")
             except socket.timeout:
-                print(f"Client {client} cannot reconnect to the server due timeout (5s)!")
+                print(f"Client {address} cannot reconnect to the server due timeout (5s)!")
             except socket.error:
-                print(f"Client {client} cannot reconnect to the server!")
+                print(f"Client {address} cannot reconnect to the server!")

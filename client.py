@@ -148,6 +148,7 @@ class Client:
             self.state = ClientState.INGAME
             state = self.beginGame(True)
             send(self.serverSocket, f"matchfin {state} {self.username} ({addr},{port}) {username}")
+            # TODO: Send when server returns or timeout
 
         elif command == "send":
             print("Not in match")
@@ -217,7 +218,9 @@ class Client:
                             # print(f"-- Client trying to reconnect to the server: {count}s...")
                         time.sleep(1)
                         count += 1
-                        if count == 5:
+                        if self.state == ClientState.INGAME:
+                            count = 0
+                        if count == 180:
                             print(f"-- Client cannot reconnect to the server due timeout ({count}s)!")
                             if self.state == ClientState.INGAME:
                                 print(f"-- You are playing for fun!!!")

@@ -10,11 +10,11 @@ DATABASE = 'data.csv'
 
 ''' Class to handle each user connected with the server'''
 class Connection:
-    def __init__(self, clientSocket, addr, server):
+    def __init__(self, clientSocket, addr, server, user = None):
         self.socket = clientSocket
         self.addr = addr
         self.server = server
-        self.user = None
+        self.user = user
         self.stop = False
         self.exit = 'purposeful'
 
@@ -157,7 +157,7 @@ class Connection:
             self.server.log.write(f"[{datetime.datetime.now()}] client:begin:{self.addr}:{host}:{guest_addr}:{guest}\n")
 
         elif command == "matchfin":
-            if len(args) != 3:
+            if len(args) != 4:
                 return
             matchState = MatchState(int(args[0]))
             host = args[1]
@@ -174,25 +174,29 @@ class Connection:
             elif matchState == MatchState.LOST:
                 self.server.df.loc[self.server.df['User'] == guest, 'Score'] += 2
                 winner = guest
-
+            
             self.server.df.to_csv(DATABASE, index=False)
             self.server.log.write(f"[{datetime.datetime.now()}] client:end:{self.addr}:{host}:{guest_addr}:{guest}:{winner}\n")
 
         elif command == "logout":
             if self.user:
                 self.user.logout()
+                self.server.log.write(f"[{datetime.datetime.now()}] client:logout:{self.addr}:{self.user.username}\n")
                 self.user = None
                 self.send("ack")
+                
             self.send("User not logged in")
 
         elif command == "exit":
             if self.user:
                 self.user.logout()
+                self.server.log.write(f"[{datetime.datetime.now()}] client:logout:{self.addr}:{self.user.username}\n")
             self.stop = True
 
         elif command == "DISCONNECT":
             if self.user:
                 self.user.logout()
+                self.server.log.write(f"[{datetime.datetime.now()}] client:logout:{self.addr}:{self.user.username}\n")
             self.stop = True
 
     def send(self, msg):
