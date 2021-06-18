@@ -24,7 +24,7 @@ class Server:
         # Rebuild server state after crash (if needed) 
         rebuild = RebuildServer()
         rebuild.parseLog(LOG)
-        
+
         self.log = open(LOG, "w")
         self.log.write(f"[{datetime.datetime.now()}] server:open:({self.ip_addr}, {port}):{rebuild.exit}\n")
 
@@ -39,6 +39,7 @@ class Server:
                 self.users[usr] = user
         else:
             self.df = pd.DataFrame(columns = ['User', 'Password', 'Score'])
+        self.df_lock = threading.Lock()
 
         # Restablish connections and privileges
         self.servaddr.settimeout(5) # Limit to 5 seconds for reconnect to each client

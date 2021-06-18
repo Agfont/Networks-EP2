@@ -26,12 +26,13 @@ class RebuildServer:
         self.clients = {}
         self.games = {}
         self.exit = ServerExit.SUCCESS
-        
+
     def parseLog(self, log):
         openCounter = 0
         closeCounter = 0
         try:
             file = open(log)
+            print("Processing log history...")
             for line in file:
                 data = line.split(maxsplit=FIXED_HEADER-1)[2] # data = [<time> , <hour>, <side>:<command>:<addr\n> ]
                 fields = data.split(":",maxsplit=FIXED_HEADER-1) # fields = [<side>, <command>, <addr\n>]
@@ -90,6 +91,7 @@ class RebuildServer:
     ''' Restablish connection with each client connected '''
     def restablish_connections(self, server):
         for address, username in self.clients_connected():
+            print(f"Restablishing connection to {username} on {address}...")
             try:
                 clientSocket, addr = server.servaddr.accept()
                 if username == None: 

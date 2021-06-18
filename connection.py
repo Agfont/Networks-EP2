@@ -38,95 +38,87 @@ class Connection:
     def processCommand(self, command, args):
         if command == "adduser":
             if len(args) != 2:
-                print("adduser: Invalid message format")
                 self.send("Invalid message format")
                 return
             username = args[0]
             passwd = args[1]
             with self.server.users_lock:
                 if username in self.server.users:
-                    print(f"adduser: User {username} already exists!")
-                    self.send(f"User {username} already exists!")
+                    self.send(f"User {username} already exists")
                     return
-                print(f"adduser: User {username} created!")
                 self.server.users[username] = User(username)
+                print(f"adduser: User {username} created!")
                 self.send("ack")
 
                 # Update database
                 entry = {'User' : username,
                          'Password' : passwd,
                          'Score':   0}
-                self.server.df = self.server.df.append(entry, ignore_index=True)
-                self.server.df.to_csv(DATABASE, index = False)
+                with self.server.df_lock:
+                    self.server.df = self.server.df.append(entry, ignore_index=True)
+                    self.server.df.to_csv(DATABASE, index = False)
 
         elif command == "passwd":
             if len(args) != 2:
-                print("passwd: Invalid message format")
                 self.send("Invalid message format")
                 return
             if not self.user:
-                print("passwd: User not logged in!")
-                self.send("User not logged in")
+                self.send("You must log in first")
                 return
             old_passwd = args[0]
             new_passwd = args[1]
-            if self.server.df.loc[self.server.df['User'] == self.user.username, 'Password'] != old_passwd:
-                print("passwd: Password doesn't match!")
+            if self.server.df.loc[self.server.df['User'] == self.user.username, 'Password'].item() != old_passwd:
                 self.send("Password doesn't match")
                 return
-            print("passwd: New password set!")
+            print(f"passwd: New password set for {self.user.username}")
             self.send("ack")
 
             # Update database
-            self.server.df.loc[self.server.df['User'] == self.user.username, 'Password'] = new_passwd
-            self.server.df.to_csv(DATABASE, index=False)
+            with self.server.df_lock:
+                self.server.df.loc[self.server.df['User'] == self.user.username, 'Password'] = new_passwd
+                self.server.df.to_csv(DATABASE, index=False)
 
         elif command == "login":
             if len(args) != 3:
-                print("login: Invalid message format")
                 self.send("Invalid message format")
                 return
             if self.user:
-                self.send("You are already logged in")
+                self.send("You must log out first")
                 return
             username = args[0]
             passwd = args[1]
             port = args[2]
-            status = 'failed'
             if username not in self.server.users:
-                print("login: User doesn't exist")
                 self.send("User doesn't exist")
-                self.server.log.write(f"[{datetime.datetime.now()}] client:login:{self.addr}:{username}:{status}\n")
+                self.logLogin(username, "failed")
                 return
             user = self.server.users[username]
             if user.logged_in:
-                print("login: User logged in on your or other device")
                 self.send("User logged in on your or other device")
-                self.server.log.write(f"[{datetime.datetime.now()}] client:login:{self.addr}:{username}:{status}\n")
+                self.logLogin(username, "failed")
                 return
-            if self.server.df.loc[self.server.df['User'] == user.username, 'Password'].item() != int(passwd):
-                print("login: Password incorrect")
-                self.send("Password incorrect")
-                self.server.log.write(f"[{datetime.datetime.now()}] client:login:{self.addr}:{username}:{status}\n")
-                return
+            with self.server.df_lock:
+                if self.server.df.loc[self.server.df['User'] == user.username, 'Password'].item() != passwd:
+                    print("login: Password incorrect")
+                    self.send("Password incorrect")
+                    return
             user.login(self.addr, port)
             self.user = user
-            status = 'success'
+            self.logLogin(username, "success")
             print(f"login: User {username} logged in")
-            self.server.log.write(f"[{datetime.datetime.now()}] client:login:{self.addr}:{username}:{status}\n")
             self.send("ack")
 
         elif command == "leaders":
-            self.send(self.server.df.loc[:, ['User', 'Score']].to_string())
+            self.send(self.server.df.loc[:, ['User', 'Score']].to_string(index=False))
 
         elif command == "list":
             userList = ''
             with self.server.users_lock:
                 for username, user in self.server.users.items():
                     if user.logged_in:
-                        userList += f"| {user.username:<32}|\n"
+                        userList += f"{user.username}\n"
             if not userList:
-                userList = "| No user online                  |\n"
+                userList = "No user online\n"
             self.send(userList[:-1])
 
         elif command == "begin":
@@ -134,15 +126,15 @@ class Connection:
                 self.send("Invalid message")
                 return
             if not self.user:
-                self.send("User not logged in")
+                self.send("You must be log in first")
                 return
             username = args[0]
             if username not in self.server.users:
-                self.send("Invalid opponent")
+                self.send("Opponent doesn't exist")
                 return
             opponent = self.server.users[username]
             if not opponent or not opponent.logged_in:
-                self.send("Invalid opponent")
+                self.send("Opponent not available")
                 return
             self.send(f"ack {opponent.addr[0]} {opponent.port}")
 
@@ -165,18 +157,19 @@ class Connection:
             guest = args[3]
             winner = 'DRAW'
 
-            if matchState == MatchState.DRAW:
-                self.server.df.loc[self.server.df['User'] == host, 'Score'] += 1
-                self.server.df.loc[self.server.df['User'] == guest, 'Score'] += 1
-            elif matchState == MatchState.WON:
-                self.server.df.loc[self.server.df['User'] == host, 'Score'] += 2
-                winner = host
-            elif matchState == MatchState.LOST:
-                self.server.df.loc[self.server.df['User'] == guest, 'Score'] += 2
-                winner = guest
-            
-            self.server.df.to_csv(DATABASE, index=False)
-            self.server.log.write(f"[{datetime.datetime.now()}] client:end:{self.addr}:{host}:{guest_addr}:{guest}:{winner}\n")
+            with self.server.df_lock:
+                if matchState == MatchState.DRAW:
+                    self.server.df.loc[self.server.df['User'] == host, 'Score'] += 1
+                    self.server.df.loc[self.server.df['User'] == guest, 'Score'] += 1
+                elif matchState == MatchState.WON:
+                    self.server.df.loc[self.server.df['User'] == host, 'Score'] += 2
+                    winner = host
+                elif matchState == MatchState.LOST:
+                    self.server.df.loc[self.server.df['User'] == guest, 'Score'] += 2
+                    winner = guest
+
+                self.server.df.to_csv(DATABASE, index=False)
+                self.server.log.write(f"[{datetime.datetime.now()}] client:end:{self.addr}:{host}:{guest_addr}:{guest}:{winner}\n")
 
         elif command == "logout":
             if self.user:
@@ -184,7 +177,7 @@ class Connection:
                 self.server.log.write(f"[{datetime.datetime.now()}] client:logout:{self.addr}:{self.user.username}\n")
                 self.user = None
                 self.send("ack")
-                
+
             self.send("User not logged in")
 
         elif command == "exit":
@@ -198,6 +191,9 @@ class Connection:
                 self.user.logout()
                 self.server.log.write(f"[{datetime.datetime.now()}] client:logout:{self.addr}:{self.user.username}\n")
             self.stop = True
+
+    def logLogin(self, username, status):
+        self.server.log.write(f"[{datetime.datetime.now()}] client:login:{self.addr}:{username}:{status}\n")
 
     def send(self, msg):
         self.socket.send(msg.encode('ASCII'))

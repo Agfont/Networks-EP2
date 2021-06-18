@@ -35,7 +35,6 @@ class Client:
         addr.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         addr.listen(LISTENQ)
         self.listenPort = addr.getsockname()[1]
-        print(f"port: {addr.getsockname()[1]}")
 
         # Thread to receive invitations from other players
         recvInvites_thread = threading.Thread(target = self.inviteLoop, args = (addr,))
@@ -93,17 +92,15 @@ class Client:
             send(self.serverSocket, raw_msg)
             data = receive(self.serverSocket)
             if len(data) > 0:
-                print("|---------- Score Table ----------|")
+                print("--- Score Board")
                 print(data)
-                print("|---------------------------------|")
 
         elif command == "list":
             send(self.serverSocket, raw_msg)
             data = receive(self.serverSocket)
             if len(data) > 0:
-                print("|------------ Players ------------|")
+                print("--- Online Players")
                 print(data)
-                print("|---------------------------------|")
 
         elif command == "begin":
             if len(args) != 1:
