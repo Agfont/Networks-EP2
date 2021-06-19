@@ -1,7 +1,7 @@
 # MAC0352 - Redes de  Computadores e Sistemas Distribuídos
 ## EP2 - Sistema Distribuído (Jogo da Velha)
-# Arthur Gouveia Font - 12036152
-# Lucas Pires Stankus - 
+## Arthur Gouveia Font - 12036152
+## Lucas Pires Stankus - 10723624
 > Status: Finished
 
 Este projeto implementa um sistema distribuído que possibilita partidas de jogo da velha em uma arquitetura híbrida (P2P e cliente/servidor) com tolerância a algumas falhas.\
@@ -16,34 +16,34 @@ O servidor registra alguns acontecimentos em um arquivo de log para permitir a r
 + Troca de mensagens em modo texto (ASCII) entre cliente e servidor e entre clientes
 
 ## Informações registradas no log:
-• Servidor iniciado
-• Conexão realizada por um cliente (Endereço IP do cliente)
-• Login com sucesso ou não (Nome do usuário que conseguiu, ou não, logar, e endereço IP de onde veio o login)
-• Logout com sucesso
-• Desconexão realizada por um cliente (Endereço IP do cliente)
-• Desconexão inesperada de um cliente, verificada pelos heartbeats (Endereço IP do cliente)
-• Início de uma partida (Endereço IP e nomes dos usuários dos jogadores)
-• Finalização de uma partida (Endereço IP, nomes dos usuários dos jogadores e nome do vencedor)
-• Servidor finalizado
+* Servidor iniciado
+* Conexão realizada por um cliente (Endereço IP do cliente)
+* Login com sucesso ou não (Nome do usuário que conseguiu, ou não, logar, e endereço IP de onde veio o login)
+* Logout com sucesso
+* Desconexão realizada por um cliente (Endereço IP do cliente)
+* Desconexão inesperada de um cliente, verificada pelos heartbeats (Endereço IP do cliente)
+* Início de uma partida (Endereço IP e nomes dos usuários dos jogadores)
+* Finalização de uma partida (Endereço IP, nomes dos usuários dos jogadores e nome do vencedor)
+* Servidor finalizado
 
 ## Comandos aceitos pelo sistema (via prompt do cliente):
-• adduser <usuario> <senha>: cria um novo usuário
-• passwd <senha antiga> <senha nova>: muda a senha do usuário
-• login <usuario> <senha>: loga
-• leaders: informa a tabela de pontuação de todos os usuários registrados no sistema
-• list: lista todos os usuários conectados no momento e se estão ocupados em uma partida ou não
-• begin <oponente>: convida um oponente para jogar. Ele pode aceitar ou não
-• send <linha> <coluna>: envia a jogada
-• delay: durante uma partida, informa os 3 últimos valores de latência que foram medidos para o
+* adduser <usuario> <senha>: cria um novo usuário
+* passwd <senha antiga> <senha nova>: muda a senha do usuário
+* login <usuario> <senha>: loga
+* leaders: informa a tabela de pontuação de todos os usuários registrados no sistema
+* list: lista todos os usuários conectados no momento e se estão ocupados em uma partida ou não
+* begin <oponente>: convida um oponente para jogar. Ele pode aceitar ou não
+* send <linha> <coluna>: envia a jogada
+* delay: durante uma partida, informa os 3 últimos valores de latência que foram medidos para o
 cliente do oponente
-• end: encerra uma partida antes da hora
-• logout: desloga
-• exit: finaliza a execução do cliente e retorna para o shell do sistema operacional
+* end: encerra uma partida antes da hora
+* logout: desloga
+* exit: finaliza a execução do cliente e retorna para o shell do sistema operacional
 
 ## Tolerância de falhas
 O sistema tolera as seguintes falhas do servidor, limitadas a um intervalo de 3 minutos.
-• Processo do servidor foi finalizado por um ‘kill -9‘
-• Rede do servidor foi desconectada por um ‘ifdown‘
+* Processo do servidor foi finalizado por um ‘kill -9‘
+* Rede do servidor foi desconectada por um ‘ifdown‘
 
 ## Tecnologias Utilizadas:
 
@@ -57,12 +57,17 @@ O sistema tolera as seguintes falhas do servidor, limitadas a um intervalo de 3 
   <tr>
     <td>3.8.5</td>
     <td>1.2.3</td>
-    <td>x.x.x</td>
+    <td>1.1.1k</td>
     <td>3.2.3</td>
   </tr>
 </table>
 
 ## Compilação, Remoção e Inicialização:
+Para funcionamento o servidor deve ter gerado chaves publicas e privadas, para gerar use o seguinte comando no shell:
+```
+$ nao sei o comando (depois adiciono)
+```
+Eles devem ser salvos no diretorio `/perm`.
 Para incializar o servidor, basta executar o seguinte comando no shell:
 ```
 $ python3 main.py <PORT>
