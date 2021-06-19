@@ -92,14 +92,14 @@ class Client:
             send(self.serverSocket, raw_msg)
             data = receive(self.serverSocket)
             if len(data) > 0:
-                print("--- Score Board")
+                print("--- Score Board ---")
                 print(data)
 
         elif command == "list":
             send(self.serverSocket, raw_msg)
             data = receive(self.serverSocket)
             if len(data) > 0:
-                print("--- Online Players")
+                print("--- Online Players ---")
                 print(data)
 
         elif command == "begin":
@@ -255,10 +255,12 @@ def checkAck(sock):
 def send(sock, msg, force=False):
     if not force:
         try:
-            sock.send(msg.encode('ASCII'))
+            sock.send((msg + ';').encode('ASCII'))
         except IOError:
             return
-    else: sock.send(msg.encode('ASCII'))
+    else: sock.send((msg + ';').encode('ASCII'))
 
 def receive(sock):
-    return sock.recv(MAXLINE).decode('ASCII')
+    # Clients shouldn't receive multiple messages before responding, so we can ignore the
+    # possibility of receiving more than one command here
+    return sock.recv(MAXLINE).decode('ASCII')[0:-1]

@@ -9,7 +9,7 @@ BEATWAIT = 10
 DATABASE = 'data.csv'
 
 ''' Class to handle each user connected with the server'''
-class Connection:
+class ClientServerConnection:
     def __init__(self, clientSocket, addr, server, user = None):
         self.socket = clientSocket
         self.addr = addr
@@ -24,9 +24,10 @@ class Connection:
         # Loop for client communication
         while not self.stop:
             try:
-                dataRecv = self.receive()
-                if len(dataRecv) > 0:
-                    entries = dataRecv.split()
+                msgs = self.receive().split(';')
+                for msg in msgs:
+                    if not msg: continue
+                    entries = msg.split()
                     self.processCommand(entries[0], entries[1:])
             except socket.timeout:
                 self.stop = True
@@ -177,7 +178,7 @@ class Connection:
                 self.server.log.write(f"[{datetime.datetime.now()}] client:logout:{self.addr}:{self.user.username}\n")
                 self.user = None
                 self.send("ack")
-
+                return
             self.send("User not logged in")
 
         elif command == "exit":
@@ -196,7 +197,7 @@ class Connection:
         self.server.log.write(f"[{datetime.datetime.now()}] client:login:{self.addr}:{username}:{status}\n")
 
     def send(self, msg):
-        self.socket.send(msg.encode('ASCII'))
+        self.socket.send((msg + ';').encode('ASCII'))
 
     def receive(self):
         return self.socket.recv(MAXLINE).decode('ASCII')

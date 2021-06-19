@@ -2,7 +2,6 @@
 import threading
 import datetime
 import socket
-from connection import Connection
 from enum import Enum
 
 FIXED_HEADER = 3

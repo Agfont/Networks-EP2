@@ -5,7 +5,7 @@ import datetime
 import os
 import pandas as pd
 from reboot import RebuildServer
-from connection import Connection
+from connection import ClientServerConnection
 from user import User
 
 LISTENQ = 1
@@ -52,7 +52,7 @@ class Server:
         while True:
             try:
                 clientSocket, addr = self.servaddr.accept()
-                thread = threading.Thread(target = Connection, args = (clientSocket, addr, self))
+                thread = threading.Thread(target = ClientServerConnection, args = (clientSocket, addr, self))
                 thread.daemon = True
                 thread.start()
                 self.log.write(f"[{datetime.datetime.now()}] client:connect:{addr}\n")

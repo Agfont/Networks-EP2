@@ -60,7 +60,7 @@ class Game:
     def recvLoop(self):
         while self.state == MatchState.INGAME:
             try:
-                msgs = self.recv().split(';')
+                msgs = self.receive().split(';')
                 for entry in msgs:
                     if not entry: continue
                     entries = entry.split()
@@ -176,5 +176,5 @@ class Game:
     def send(self, msg):
         self.sock.send((msg + ';').encode('ASCII'))
 
-    def recv(self, blocking = False):
+    def receive(self):
         return self.sock.recv(MAXLINE).decode('ASCII')
