@@ -1,5 +1,8 @@
-import numpy as np
+from datetime import datetime
 from enum import Enum
+import numpy as np
+import threading
+import time
 
 MAXLINE = 4096
 
@@ -16,6 +19,9 @@ class Game:
         self.sock = sock
         self.turn = turn
         self.moves = 0
+        self.delays = []
+        self.delays_lock = threading.Lock()
+        self.pong_event = threading.Event()
 
         if turn:
             self.char = 'X'
@@ -27,26 +33,50 @@ class Game:
     def run(self):
         self.showBoard()
         self.state = MatchState.INGAME
+
+        # Start the receive thread
+        recv_thread = threading.Thread(target = self.recvLoop)
+        recv_thread.daemon = True
+        recv_thread.start()
+
+        # Start the ping thread
+        recv_thread = threading.Thread(target = self.pingLoop)
+        recv_thread.daemon = True
+        recv_thread.start()
+
         while self.state == MatchState.INGAME:
             try:
-                if self.turn:
-                    entry = input("JogoDaVelha>")
-                    if not entry:
-                        continue
-                    entries = entry.split()
-                    self.processCommand(entry, entries[0], entries[1:])
-                else:
-                    print("Waiting for opponent...")
-                    entry = self.recv()
-                    if not entry:
-                        continue
-                    entries = entry.split()
-                    self.processMessage(entries[0], entries[1:])
+                if not self.turn: continue
+                entry = input("JogoDaVelha>")
+                if not entry: continue
+                entries = entry.split()
+                self.processCommand(entry, entries[0], entries[1:])
             except KeyboardInterrupt:
+                self.state = MatchState.LOST
                 self.send('end')
                 self.sock.close()
-                self.state = MatchState.LOST
         return self.state.value
+
+    def recvLoop(self):
+        while self.state == MatchState.INGAME:
+            try:
+                msgs = self.recv().split(';')
+                for entry in msgs:
+                    if not entry: continue
+                    entries = entry.split()
+                    self.processMessage(entries[0], entries[1:])
+            except:
+                return
+
+    def pingLoop(self):
+        while self.state == MatchState.INGAME:
+            try:
+                self.sendPing()
+                self.pong_event.wait()
+                self.pong_event.clear()
+                time.sleep(5)
+            except:
+                return
 
     def processCommand(self, raw_msg, cmd, args):
         if cmd == 'send':
@@ -56,14 +86,15 @@ class Game:
                 self.send(raw_msg)
                 self.board[x, y] = self.char
                 self.moves += 1
-                self.turn = False
                 self.showBoard()
                 self.checkState()
+                self.turn = False
             else:
                 print("Invalid movement")
         elif cmd == 'delay':
-            # TODO: checar tudo
-            pass
+            print("Last three delays:")
+            for delay in self.delays:
+                print(f"{int(delay * 100)}ms")
         elif cmd == 'end':
             self.send('end')
             self.state = MatchState.LOST
@@ -76,14 +107,24 @@ class Game:
             y = int(args[1]) - 1
             self.board[x, y] = self.opChar
             self.moves += 1
-            self.turn = True
             print(f"Opponent placed on {args[0]} {args[1]}")
             self.showBoard()
             self.checkState()
+            self.turn = True
         elif cmd == 'end':
             print("Opponent quit the match!")
             self.state = MatchState.WON
-            return
+        elif cmd == 'ping':
+            self.send('pong')
+        elif cmd == 'pong':
+            now = datetime.now()
+            with self.delays_lock:
+                self.delays.append((now - self.pingSentTime).total_seconds() / 2) # delay should be rtt / 2
+                if len(self.delays) > 3:
+                    self.delays.pop(0)
+            self.pingSentTime = None
+            self.lastPing = now
+            self.pong_event.set()
         else:
             self.send("?")
 
@@ -128,8 +169,12 @@ class Game:
         print("──┼───┼──")
         print(f"{self.board[2, 0]} │ {self.board[2, 1]} │ {self.board[2, 2]}")
 
-    def send(self, msg):
-        self.sock.send(msg.encode('ASCII'))
+    def sendPing(self):
+        self.pingSentTime = datetime.now()
+        self.send('ping')
 
-    def recv(self):
+    def send(self, msg):
+        self.sock.send((msg + ';').encode('ASCII'))
+
+    def recv(self, blocking = False):
         return self.sock.recv(MAXLINE).decode('ASCII')
