@@ -2,6 +2,7 @@
 from client.game import Game
 from enum import Enum
 import errno
+import os
 import socket
 import threading
 import time
@@ -23,6 +24,9 @@ class Client:
         except socket.error:
             print("Client cannot connect to the server!")
             exit(1)
+
+        self.up_event = threading.Event()
+        self.up_event.set()
 
         # Thread to send heartbeats to the server
         hb_thread = threading.Thread(target = self.heartbeat, args=(addr, port))
@@ -55,7 +59,7 @@ class Client:
                 self.processCommand(entry, entries[0], entries[1:])
             except KeyboardInterrupt:
                 try:
-                    send(self.serverSocket, 'DISCONNECT')
+                    self.send(self.serverSocket, 'DISCONNECT')
                 except IOError:
                     pass
                 self.serverSocket.close()
@@ -70,33 +74,33 @@ class Client:
             if len(args) != 2:
                 print("Invalid message, expected: adduser <user> <passwd>")
                 return
-            send(self.serverSocket, raw_msg)
+            self.send(self.serverSocket, raw_msg)
             checkAck(self.serverSocket)
 
         elif command == "passwd":
             if len(args) != 2:
                 print("Invalid message, expected: passwd <old passwd> <new passwd>")
                 return
-            send(self.serverSocket, raw_msg)
+            self.send(self.serverSocket, raw_msg)
             checkAck(self.serverSocket)
 
         elif command == "login":
             if len(args) != 2:
                 print("Invalid message, expected: login <user> <passwd>")
                 return
-            send(self.serverSocket, raw_msg + f" {self.listenPort}")
+            self.send(self.serverSocket, raw_msg + f" {self.listenPort}")
             if (checkAck(self.serverSocket)):
                 self.username = args[0]
 
         elif command == "leaders":
-            send(self.serverSocket, raw_msg)
+            self.send(self.serverSocket, raw_msg)
             data = receive(self.serverSocket)
             if len(data) > 0:
                 print("--- Score Board ---")
                 print(data)
 
         elif command == "list":
-            send(self.serverSocket, raw_msg)
+            self.send(self.serverSocket, raw_msg)
             data = receive(self.serverSocket)
             if len(data) > 0:
                 print("--- Online Players ---")
@@ -109,7 +113,7 @@ class Client:
             if args[0] == self.username:
                 print("You can't send an invite to yourself")
                 return
-            send(self.serverSocket, raw_msg)
+            self.send(self.serverSocket, raw_msg)
             data = receive(self.serverSocket)
             if data[0:3] != 'ack':
                 print(data)
@@ -134,18 +138,17 @@ class Client:
                 return
 
             # Connection established with opponent
-            send(self.opponentSocket, f"invite {self.username}")
+            self.send(self.opponentSocket, f"invite {self.username}")
             msg = receive(self.opponentSocket)
             if (msg != 'acc'):
                 print('Opponent refused!')
                 self.opponentSocket.close()
                 self.opponentSocket = None
                 return
-            send(self.serverSocket, f"matchinit {self.username} ({addr},{port}) {username}")
+            self.send(self.serverSocket, f"matchinit {self.username} ({addr},{port}) {username}")
             self.state = ClientState.INGAME
             state = self.beginGame(True)
-            send(self.serverSocket, f"matchfin {state} {self.username} ({addr},{port}) {username}")
-            # TODO: Send when server returns or timeout
+            self.send(self.serverSocket, f"matchfin {state} {self.username} ({addr},{port}) {username}")
 
         elif command == "send":
             print("Not in match")
@@ -157,7 +160,7 @@ class Client:
             print("No game to end")
 
         elif command == "logout":
-            send(self.serverSocket, raw_msg)
+            self.send(self.serverSocket, raw_msg)
             if (checkAck(self.serverSocket)):
                 self.username = ""
 
@@ -168,12 +171,12 @@ class Client:
     ''' Process invite answered by opponent '''
     def processInvite(self, entry):
         if (entry != 'y'):
-            send(self.opponentSocket, 'nacc')
+            self.send(self.opponentSocket, 'nacc')
             self.state = ClientState.PROMPT
             self.opponentSocket.close()
             self.opponentSocket = None
             return
-        send(self.opponentSocket, 'acc')
+        self.send(self.opponentSocket, 'acc')
         self.beginGame()
 
     ''' Start a match, willBegin parameter controls which player will start '''
@@ -190,13 +193,16 @@ class Client:
         reconnecting = False
         while not reconnecting:
             try:
-                send(self.serverSocket, "Thump!", True)
+                self.send(self.serverSocket, "Thump!", True)
                 time.sleep(BEATWAIT)
             except IOError as e:
                 # Server disconnected: Handle Broken pipe
                 reconnecting = True
+                self.up_event.clear()
                 if e.errno == errno.EPIPE:
-                    print("\n-- Server disconnected")
+                    if self.state == ClientState.PROMPT:
+                        print("\n-- Server disconnected")
+                        print("JogoDaVelha>", end='', flush=True)
                     self.serverSocket.close()
                     self.serverSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                     count = 0
@@ -205,10 +211,11 @@ class Client:
                     while True:
                         try:
                             self.serverSocket.connect((addr, port))
-                            print("-- Connection reestablished with server!")
                             if self.state == ClientState.PROMPT:
+                                print("-- Connection reestablished with server!")
                                 print("JogoDaVelha>", end='', flush=True)
                             reconnecting = False
+                            self.up_event.set()
                             break
                         except socket.error:
                             pass
@@ -219,9 +226,9 @@ class Client:
                             count = 0
                         if count == 180:
                             print(f"-- Client cannot reconnect to the server due timeout ({count}s)!")
-                            if self.state == ClientState.INGAME:
-                                print(f"-- You are playing for fun!!!")
                             break
+        print('Could not restablish connection, closing client...')
+        os._exit(1)
 
     ''' Loop for receive invitations from other players. If user is in game, reject automatically. '''
     def inviteLoop(self, addr):
@@ -230,18 +237,28 @@ class Client:
             invite = receive(sock)
 
             if self.state != ClientState.PROMPT:
-                send(sock, "nacc")
+                self.send(sock, "nacc")
                 sock.close()
                 continue
 
             entries = invite.split()
             if (entries[0] != 'invite'):
-                send(sock, "nacc")
+                self.send(sock, "nacc")
 
             self.state = ClientState.INGAME
             self.opponentSocket = sock
             print()
             print(f"{entries[1]} is inviting you to a match, accept invite(y/N):", end=" ", flush=True)
+
+    def send(self, sock, msg, force=False):
+        if not force:
+            try:
+                self.up_event.wait()
+                sock.send((msg + ';').encode('ASCII'))
+            except IOError:
+                return
+        else:
+            sock.send((msg + ';').encode('ASCII'))
 
 
 def checkAck(sock):
@@ -251,14 +268,6 @@ def checkAck(sock):
     elif data == '': data = "Broken Pipe"
     print(f"Server error: {data}")
     return False
-
-def send(sock, msg, force=False):
-    if not force:
-        try:
-            sock.send((msg + ';').encode('ASCII'))
-        except IOError:
-            return
-    else: sock.send((msg + ';').encode('ASCII'))
 
 def receive(sock):
     # Clients shouldn't receive multiple messages before responding, so we can ignore the

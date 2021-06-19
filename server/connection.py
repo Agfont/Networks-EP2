@@ -34,6 +34,7 @@ class ClientServerConnection:
                 self.exit = 'unexpected'
 
         self.server.log.write(f"[{datetime.datetime.now()}] client:disconnect:{self.addr}:{self.exit}\n")
+        self.server.log.flush()
         self.socket.close()
 
     def processCommand(self, command, args):
@@ -148,6 +149,7 @@ class ClientServerConnection:
 
             # First is 'X' (who sent the invite), second is 'O' (who received the invite)
             self.server.log.write(f"[{datetime.datetime.now()}] client:begin:{self.addr}:{host}:{guest_addr}:{guest}\n")
+            self.server.log.flush()
 
         elif command == "matchfin":
             if len(args) != 4:
@@ -171,11 +173,13 @@ class ClientServerConnection:
 
                 self.server.df.to_csv(DATABASE, index=False)
                 self.server.log.write(f"[{datetime.datetime.now()}] client:end:{self.addr}:{host}:{guest_addr}:{guest}:{winner}\n")
+                self.server.log.flush()
 
         elif command == "logout":
             if self.user:
                 self.user.logout()
                 self.server.log.write(f"[{datetime.datetime.now()}] client:logout:{self.addr}:{self.user.username}\n")
+                self.server.log.flush()
                 self.user = None
                 send(self.socket, "ack")
                 return
@@ -185,16 +189,19 @@ class ClientServerConnection:
             if self.user:
                 self.user.logout()
                 self.server.log.write(f"[{datetime.datetime.now()}] client:logout:{self.addr}:{self.user.username}\n")
+                self.server.log.flush()
             self.stop = True
 
         elif command == "DISCONNECT":
             if self.user:
                 self.user.logout()
                 self.server.log.write(f"[{datetime.datetime.now()}] client:logout:{self.addr}:{self.user.username}\n")
+                self.server.log.flush()
             self.stop = True
 
     def logLogin(self, username, status):
         self.server.log.write(f"[{datetime.datetime.now()}] client:login:{self.addr}:{username}:{status}\n")
+        self.server.log.flush()
 
 def send(socket, msg):
     socket.send((msg + ';').encode('ASCII'))

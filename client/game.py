@@ -93,8 +93,9 @@ class Game:
                 print("Invalid movement")
         elif cmd == 'delay':
             print("Last three delays:")
-            for delay in self.delays:
-                print(f"{int(delay * 100)}ms")
+            with self.delays_lock:
+                for delay in self.delays:
+                    print(f"{int(delay * 100)}ms")
         elif cmd == 'end':
             self.send('end')
             self.state = MatchState.LOST

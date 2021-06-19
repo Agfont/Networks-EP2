@@ -27,6 +27,7 @@ class Server:
 
         self.log = open(LOG, "w")
         self.log.write(f"[{datetime.datetime.now()}] server:open:({self.ip_addr}, {port}):{rebuild.exit}\n")
+        self.log.flush()
 
         # Charge users on memory with a dictionary
         self.users = {}
@@ -42,8 +43,9 @@ class Server:
         self.df_lock = threading.Lock()
 
         # Restablish connections and privileges
-        self.servaddr.settimeout(5) # Limit to 5 seconds for reconnect to each client
-        rebuild.restablish_connections(self)
+        if rebuild.serverCrashed:
+            self.servaddr.settimeout(5) # Limit to 5 seconds for reconnect to each client
+            rebuild.restablish_connections(self)
         self.servaddr.settimeout(None) # Clear timeout
 
         print(f"[Servidor no ar. Aguardando conexões na porta {port}]")
@@ -56,10 +58,12 @@ class Server:
                 thread.daemon = True
                 thread.start()
                 self.log.write(f"[{datetime.datetime.now()}] client:connect:{addr}\n")
+                self.log.flush()
             except KeyboardInterrupt:
                 break
 
         # Close socket and log
         print("Exiting the server")
         self.log.write(f"[{datetime.datetime.now()}] server:close:({self.ip_addr}, {port})\n")
+        self.log.flush()
         self.log.close()
