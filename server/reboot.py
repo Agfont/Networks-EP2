@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-import threading
+from enum import Enum
 import datetime
 import socket
-from enum import Enum
+import threading
 
 FIXED_HEADER = 3
 extra_len = {

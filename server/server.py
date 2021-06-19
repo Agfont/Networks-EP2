@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-import socket
-import threading
+from server.connection import ClientServerConnection
+from server.reboot import RebuildServer
+from server.user import User
 import datetime
 import os
 import pandas as pd
-from reboot import RebuildServer
-from connection import ClientServerConnection
-from user import User
+import socket
+import threading
 
 LISTENQ = 1
-LOG = 'server.log'
-DATABASE = 'data.csv'
+LOG = 'server/data/server.log'
+DATABASE = 'server/data/data.csv'
 
 class Server:
     def __init__(self, port):

@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-import socket
+from client.game import MatchState
+from server.user import User
 import datetime
-from user import User
-from game import MatchState
+import socket
 
 MAXLINE = 4096
 BEATWAIT = 10
-DATABASE = 'data.csv'
+DATABASE = 'server/data/data.csv'
 
 ''' Class to handle each user connected with the server'''
 class ClientServerConnection:
@@ -24,7 +24,7 @@ class ClientServerConnection:
         # Loop for client communication
         while not self.stop:
             try:
-                msgs = self.receive().split(';')
+                msgs = receive(self.socket).split(';')
                 for msg in msgs:
                     if not msg: continue
                     entries = msg.split()
@@ -39,17 +39,17 @@ class ClientServerConnection:
     def processCommand(self, command, args):
         if command == "adduser":
             if len(args) != 2:
-                self.send("Invalid message format")
+                send(self.socket, "Invalid message format")
                 return
             username = args[0]
             passwd = args[1]
             with self.server.users_lock:
                 if username in self.server.users:
-                    self.send(f"User {username} already exists")
+                    send(self.socket, f"User {username} already exists")
                     return
                 self.server.users[username] = User(username)
                 print(f"adduser: User {username} created!")
-                self.send("ack")
+                send(self.socket, "ack")
 
                 # Update database
                 entry = {'User' : username,
@@ -61,18 +61,18 @@ class ClientServerConnection:
 
         elif command == "passwd":
             if len(args) != 2:
-                self.send("Invalid message format")
+                send(self.socket, "Invalid message format")
                 return
             if not self.user:
-                self.send("You must log in first")
+                send(self.socket, "You must log in first")
                 return
             old_passwd = args[0]
             new_passwd = args[1]
             if self.server.df.loc[self.server.df['User'] == self.user.username, 'Password'].item() != old_passwd:
-                self.send("Password doesn't match")
+                send(self.socket, "Password doesn't match")
                 return
             print(f"passwd: New password set for {self.user.username}")
-            self.send("ack")
+            send(self.socket, "ack")
 
             # Update database
             with self.server.df_lock:
@@ -81,36 +81,36 @@ class ClientServerConnection:
 
         elif command == "login":
             if len(args) != 3:
-                self.send("Invalid message format")
+                send(self.socket, "Invalid message format")
                 return
             if self.user:
-                self.send("You must log out first")
+                send(self.socket, "You must log out first")
                 return
             username = args[0]
             passwd = args[1]
             port = args[2]
             if username not in self.server.users:
-                self.send("User doesn't exist")
+                send(self.socket, "User doesn't exist")
                 self.logLogin(username, "failed")
                 return
             user = self.server.users[username]
             if user.logged_in:
-                self.send("User logged in on your or other device")
+                send(self.socket, "User logged in on your or other device")
                 self.logLogin(username, "failed")
                 return
             with self.server.df_lock:
                 if self.server.df.loc[self.server.df['User'] == user.username, 'Password'].item() != passwd:
                     print("login: Password incorrect")
-                    self.send("Password incorrect")
+                    send(self.socket, "Password incorrect")
                     return
             user.login(self.addr, port)
             self.user = user
             self.logLogin(username, "success")
             print(f"login: User {username} logged in")
-            self.send("ack")
+            send(self.socket, "ack")
 
         elif command == "leaders":
-            self.send(self.server.df.loc[:, ['User', 'Score']].to_string(index=False))
+            send(self.socket, self.server.df.loc[:, ['User', 'Score']].to_string(index=False))
 
         elif command == "list":
             userList = ''
@@ -120,24 +120,24 @@ class ClientServerConnection:
                         userList += f"{user.username}\n"
             if not userList:
                 userList = "No user online\n"
-            self.send(userList[:-1])
+            send(self.socket, userList[:-1])
 
         elif command == "begin":
             if len(args) != 1:
-                self.send("Invalid message")
+                send(self.socket, "Invalid message")
                 return
             if not self.user:
-                self.send("You must be log in first")
+                send(self.socket, "You must be log in first")
                 return
             username = args[0]
             if username not in self.server.users:
-                self.send("Opponent doesn't exist")
+                send(self.socket, "Opponent doesn't exist")
                 return
             opponent = self.server.users[username]
             if not opponent or not opponent.logged_in:
-                self.send("Opponent not available")
+                send(self.socket, "Opponent not available")
                 return
-            self.send(f"ack {opponent.addr[0]} {opponent.port}")
+            send(self.socket, f"ack {opponent.addr[0]} {opponent.port}")
 
         elif command == "matchinit":
             if len(args) != 3:
@@ -177,9 +177,9 @@ class ClientServerConnection:
                 self.user.logout()
                 self.server.log.write(f"[{datetime.datetime.now()}] client:logout:{self.addr}:{self.user.username}\n")
                 self.user = None
-                self.send("ack")
+                send(self.socket, "ack")
                 return
-            self.send("User not logged in")
+            send(self.socket, "User not logged in")
 
         elif command == "exit":
             if self.user:
@@ -196,8 +196,8 @@ class ClientServerConnection:
     def logLogin(self, username, status):
         self.server.log.write(f"[{datetime.datetime.now()}] client:login:{self.addr}:{username}:{status}\n")
 
-    def send(self, msg):
-        self.socket.send((msg + ';').encode('ASCII'))
+def send(socket, msg):
+    socket.send((msg + ';').encode('ASCII'))
 
-    def receive(self):
-        return self.socket.recv(MAXLINE).decode('ASCII')
+def receive(socket):
+    return socket.recv(MAXLINE).decode('ASCII')

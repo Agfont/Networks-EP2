@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-from server import Server
-from client import Client
+from server.server import Server
+from client.client import Client
 import sys
 
-def main(): 
+def main():
     # python3 main.py <PORT>
     if(len(sys.argv) == 2):
         if (sys.argv[1].isdigit()): 
@@ -17,7 +17,7 @@ def main():
             Client(sys.argv[1], int(sys.argv[2]))
         else:
             print('The third argument must be a port number')
-        
+
     else:
         print('Invalid number of arguments')
 

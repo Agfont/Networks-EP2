@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
+from client.game import Game
+from enum import Enum
+import errno
 import socket
 import threading
-import errno
 import time
-from enum import Enum
-from game import Game
 
 LISTENQ = 1
 MAXLINE = 4096
