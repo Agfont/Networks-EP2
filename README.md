@@ -67,11 +67,10 @@ Para instalar o pandas, basta executar o seguinte comando no shell:
 $ pip install pandas
 ```
 ## Compilação, Remoção e Inicialização:
-Para funcionamento o servidor deve ter gerado chaves publicas e privadas, para gerar use o seguinte comando no shell:
+Para a criptografia do servidor funcionar corretamente são necessárias uma chave pública (pk) e uma secreta (sk), para gerar ambas use o seguinte comando dentro do diretório `/perm`:
 ```
-$ nao sei o comando (depois adiciono)
+$ openssl req -new -x509 -days 365 -nodes -out pk.pem -keyout sk.pem -subj "/CN=JogoDaVelha"
 ```
-Eles devem ser salvos no diretorio `/perm`.
 Para incializar o servidor, basta executar o seguinte comando no shell:
 ```
 $ python3 main.py <PORT>
