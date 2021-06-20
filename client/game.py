@@ -46,7 +46,7 @@ class Game:
 
         while self.state == MatchState.INGAME:
             try:
-                if not self.turn: continue
+                if not self.turn or self.state != MatchState.INGAME: continue
                 entry = input("JogoDaVelha>")
                 if not entry: continue
                 entries = entry.split()

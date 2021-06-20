@@ -131,6 +131,9 @@ class ClientServerConnection:
                 send(self.socket, "You must be log in first")
                 return
             username = args[0]
+            if self.user.username == username:
+                send(self.socket, "You can't invite yourself")
+                return
             if username not in self.server.users:
                 send(self.socket, "Opponent doesn't exist")
                 return
@@ -138,7 +141,7 @@ class ClientServerConnection:
             if not opponent or not opponent.logged_in:
                 send(self.socket, "Opponent not available")
                 return
-            send(self.socket, f"ack {opponent.addr[0]} {opponent.port}")
+            send(self.socket, f"ack {self.user.username} {opponent.addr[0]} {opponent.port}")
 
         elif command == "matchinit":
             if len(args) != 3:

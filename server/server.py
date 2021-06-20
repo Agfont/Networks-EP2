@@ -6,16 +6,21 @@ import datetime
 import os
 import pandas as pd
 import socket
+import ssl
 import threading
 
 LISTENQ = 1
 LOG = 'server/data/server.log'
 DATABASE = 'server/data/data.csv'
 
+CONTEXT = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+CONTEXT.load_cert_chain("perm/pk.pem", "perm/sk.pem")
+
 class Server:
     def __init__(self, port):
         # Socket server inicialization
-        self.servaddr = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        addr = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.servaddr = CONTEXT.wrap_socket(addr, server_side=True)
         self.servaddr.bind(('0.0.0.0', port))
         self.servaddr.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.servaddr.listen(LISTENQ)

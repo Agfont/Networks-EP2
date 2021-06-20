@@ -4,12 +4,17 @@ from enum import Enum
 import errno
 import os
 import socket
+import ssl
 import threading
 import time
 
 LISTENQ = 1
 MAXLINE = 4096
 BEATWAIT = 5
+
+HOSTNAME = "JogoDaVelha"
+CONTEXT = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+CONTEXT.load_verify_locations("perm/pk.pem")
 
 class ClientState(Enum):
     EXIT   = 0
@@ -18,7 +23,8 @@ class ClientState(Enum):
 
 class Client:
     def __init__(self, addr, port):
-        self.serverSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.serverSocket = CONTEXT.wrap_socket(sock, server_hostname=HOSTNAME)
         try:
             self.serverSocket.connect((addr, port))
         except socket.error:
@@ -110,26 +116,23 @@ class Client:
             if len(args) != 1:
                 print("Invalid message, expected: begin <opponent>")
                 return
-            if args[0] == self.username:
-                print("You can't send an invite to yourself")
-                return
             self.send(self.serverSocket, raw_msg)
             data = receive(self.serverSocket)
             if data[0:3] != 'ack':
-                print(data)
+                print(f"Server error: {data}")
                 return
             entries = data.split()
-            if len(entries) != 3:
+            if len(entries) != 4:
                 print("Unexpected server response format")
                 return
-            username = args[0]
-            addr = entries[1]
-            port = int(entries[2])
+            op_username = args[0]
+            _, my_username, op_addr, op_port = entries
+            op_port = int(op_port)
 
             self.opponentSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.opponentSocket.settimeout(180) # 3 minutes to connect to opponent
             try:
-                self.opponentSocket.connect((addr, port))
+                self.opponentSocket.connect((op_addr, op_port))
             except socket.timeout:
                 print("Couldn't connect to opponent: connection timeout (3 min)")
                 return
@@ -138,17 +141,17 @@ class Client:
                 return
 
             # Connection established with opponent
-            self.send(self.opponentSocket, f"invite {self.username}")
+            self.send(self.opponentSocket, f"invite {my_username}")
             msg = receive(self.opponentSocket)
             if (msg != 'acc'):
                 print('Opponent refused!')
                 self.opponentSocket.close()
                 self.opponentSocket = None
                 return
-            self.send(self.serverSocket, f"matchinit {self.username} ({addr},{port}) {username}")
+            self.send(self.serverSocket, f"matchinit {my_username} ({op_addr},{op_port}) {op_username}")
             self.state = ClientState.INGAME
             state = self.beginGame(True)
-            self.send(self.serverSocket, f"matchfin {state} {self.username} ({addr},{port}) {username}")
+            self.send(self.serverSocket, f"matchfin {state} {my_username} ({op_addr},{op_port}) {op_username}")
 
         elif command == "send":
             print("Not in match")
@@ -161,8 +164,7 @@ class Client:
 
         elif command == "logout":
             self.send(self.serverSocket, raw_msg)
-            if (checkAck(self.serverSocket)):
-                self.username = ""
+            checkAck(self.serverSocket)
 
         elif command == "exit":
             self.serverSocket.send('DISCONNECT'.encode())
@@ -270,6 +272,6 @@ def checkAck(sock):
     return False
 
 def receive(sock):
-    # Clients shouldn't receive multiple messages before responding, so we can ignore the
+    # Clients shouldn't receive multiple messages at one time, so we can ignore the
     # possibility of receiving more than one command here
     return sock.recv(MAXLINE).decode('ASCII')[0:-1]
