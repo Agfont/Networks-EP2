@@ -1,7 +1,7 @@
 # MAC0352 - Redes de  Computadores e Sistemas Distribuídos
 ## EP2 - Sistema Distribuído (Jogo da Velha)
-## Arthur Gouveia Font - 12036152
-## Lucas Pires Stankus - 10723624
+### Arthur Font Gouveia - 12036152
+### Lucas Pires Stankus - 10723624
 > Status: Finished
 
 Este projeto implementa um sistema distribuído que possibilita partidas de jogo da velha em uma arquitetura híbrida (P2P e cliente/servidor) com tolerância a algumas falhas.\
@@ -40,7 +40,7 @@ cliente do oponente
 * logout: desloga
 * exit: finaliza a execução do cliente e retorna para o shell do sistema operacional
 
-## Tolerância de falhas
+## Tolerância a falhas
 O sistema tolera as seguintes falhas do servidor, limitadas a um intervalo de 3 minutos.
 * Processo do servidor foi finalizado por um ‘kill -9‘
 * Rede do servidor foi desconectada por um ‘ifdown‘
@@ -62,6 +62,10 @@ O sistema tolera as seguintes falhas do servidor, limitadas a um intervalo de 3 
   </tr>
 </table>
 
+Para instalar o pandas, basta executar o seguinte comando no shell:
+```
+$ pip install pandas
+```
 ## Compilação, Remoção e Inicialização:
 Para funcionamento o servidor deve ter gerado chaves publicas e privadas, para gerar use o seguinte comando no shell:
 ```
