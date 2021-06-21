@@ -201,9 +201,12 @@ class Client:
                 # Server disconnected: Handle Broken pipe
                 reconnecting = True
                 self.up_event.clear()
-                if e.errno == errno.EPIPE:
+                print(e)
+                if e.errno == errno.ECONNRESET:
+                    reconnecting = False
+                elif e.errno == errno.EPIPE:
                     if self.state == ClientState.PROMPT:
-                        print("\n-- Server disconnected")
+                        print("-- Server disconnected")
                         print("JogoDaVelha>", end='', flush=True)
                     self.serverSocket.close()
                     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
