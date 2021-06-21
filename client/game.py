@@ -17,7 +17,11 @@ class Game:
         self.board = np.zeros((3, 3), dtype='<U1')
         self.board.fill(' ')
         self.sock = sock
-        self.turn = turn
+        self.turn_event = threading.Event()
+        if turn:
+            self.turn_event.set()
+        else:
+            self.turn_event.clear()
         self.moves = 0
         self.delays = []
         self.delays_lock = threading.Lock()
@@ -46,7 +50,8 @@ class Game:
 
         while self.state == MatchState.INGAME:
             try:
-                if not self.turn or self.state != MatchState.INGAME: continue
+                self.turn_event.wait()
+                if self.state != MatchState.INGAME: continue
                 entry = input("JogoDaVelha>")
                 if not entry: continue
                 entries = entry.split()
@@ -88,7 +93,7 @@ class Game:
                 self.moves += 1
                 self.showBoard()
                 self.checkState()
-                self.turn = False
+                self.turn_event.clear()
             else:
                 print("Invalid movement")
         elif cmd == 'delay':
@@ -111,10 +116,11 @@ class Game:
             print(f"Opponent placed on {args[0]} {args[1]}")
             self.showBoard()
             self.checkState()
-            self.turn = True
+            self.turn_event.set()
         elif cmd == 'end':
             print("Opponent quit the match!")
             self.state = MatchState.WON
+            self.turn_event.set()
         elif cmd == 'ping':
             self.send('pong')
         elif cmd == 'pong':
