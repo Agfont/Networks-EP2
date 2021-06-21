@@ -65,7 +65,7 @@ class Client:
                 self.processCommand(entry, entries[0], entries[1:])
             except KeyboardInterrupt:
                 try:
-                    self.send(self.serverSocket, 'DISCONNECT')
+                    self.send(self.serverSocket, "exit")
                 except IOError:
                     pass
                 self.serverSocket.close()
@@ -167,7 +167,7 @@ class Client:
             checkAck(self.serverSocket)
 
         elif command == "exit":
-            self.serverSocket.send('DISCONNECT'.encode())
+            self.send(self.serverSocket, 'exit')
             self.state = ClientState.EXIT
 
     ''' Process invite answered by opponent '''
@@ -206,7 +206,8 @@ class Client:
                         print("\n-- Server disconnected")
                         print("JogoDaVelha>", end='', flush=True)
                     self.serverSocket.close()
-                    self.serverSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    self.serverSocket = CONTEXT.wrap_socket(sock, server_hostname=HOSTNAME)
                     count = 0
 
                     # Reestablishing connection with server

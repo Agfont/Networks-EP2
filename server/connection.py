@@ -49,7 +49,6 @@ class ClientServerConnection:
                     send(self.socket, f"User {username} already exists")
                     return
                 self.server.users[username] = User(username)
-                print(f"adduser: User {username} created!")
                 send(self.socket, "ack")
 
                 # Update database
@@ -72,7 +71,6 @@ class ClientServerConnection:
             if self.server.df.loc[self.server.df['User'] == self.user.username, 'Password'].item() != old_passwd:
                 send(self.socket, "Password doesn't match")
                 return
-            print(f"passwd: New password set for {self.user.username}")
             send(self.socket, "ack")
 
             # Update database
@@ -84,12 +82,13 @@ class ClientServerConnection:
             if len(args) != 3:
                 send(self.socket, "Invalid message format")
                 return
-            if self.user:
-                send(self.socket, "You must log out first")
-                return
             username = args[0]
             passwd = args[1]
             port = args[2]
+            if self.user:
+                send(self.socket, "You must log out first")
+                self.logLogin(username, "failed")
+                return
             if username not in self.server.users:
                 send(self.socket, "User doesn't exist")
                 self.logLogin(username, "failed")
@@ -101,13 +100,12 @@ class ClientServerConnection:
                 return
             with self.server.df_lock:
                 if self.server.df.loc[self.server.df['User'] == user.username, 'Password'].item() != passwd:
-                    print("login: Password incorrect")
                     send(self.socket, "Password incorrect")
+                    self.logLogin(username, "failed")
                     return
             user.login(self.addr, port)
             self.user = user
             self.logLogin(username, "success")
-            print(f"login: User {username} logged in")
             send(self.socket, "ack")
 
         elif command == "leaders":
@@ -189,13 +187,6 @@ class ClientServerConnection:
             send(self.socket, "User not logged in")
 
         elif command == "exit":
-            if self.user:
-                self.user.logout()
-                self.server.log.write(f"[{datetime.datetime.now()}] client:logout:{self.addr}:{self.user.username}\n")
-                self.server.log.flush()
-            self.stop = True
-
-        elif command == "DISCONNECT":
             if self.user:
                 self.user.logout()
                 self.server.log.write(f"[{datetime.datetime.now()}] client:logout:{self.addr}:{self.user.username}\n")
