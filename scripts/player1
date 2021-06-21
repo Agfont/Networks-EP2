@@ -1,0 +1,26 @@
+#!/bin/expect
+
+# ./login.sh <addr> <port>
+set addr [lindex $argv 0]
+set port [lindex $argv 1]
+set user [lindex $argv 2]
+set opon [lindex $argv 3]
+spawn ./main.py $addr $port
+expect "JogoDaVelha>"
+send "login ${user} ${user}\n"
+expect "JogoDaVelha>"
+sleep 1
+send "begin ${opon}\n"
+expect "JogoDaVelha>"
+send "send 2 2\n"
+expect "JogoDaVelha>"
+send "send 3 2\n"
+expect "JogoDaVelha>"
+send "send 2 1\n"
+expect "JogoDaVelha>"
+send "send 3 3\n"
+expect "JogoDaVelha>"
+send "send 1 3\n"
+expect "JogoDaVelha>"
+send "exit\n"
+expect eof
