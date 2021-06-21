@@ -67,24 +67,31 @@ Para instalar o pandas, basta executar o seguinte comando no shell:
 $ pip install pandas
 ```
 ## Compilação, Remoção e Inicialização:
-Para a criptografia do servidor funcionar corretamente são necessárias uma chave pública (pk) e uma secreta (sk), para gerar ambas use o seguinte comando dentro do diretório `/perm`:
+Para a criptografia do servidor funcionar corretamente são necessárias uma chave pública (pk) e uma secreta (sk), para gerar ambas use o seguinte comando dentro do diretório `<raiz>/perm`:
 ```
 $ openssl req -new -x509 -days 365 -nodes -out pk.pem -keyout sk.pem -subj "/CN=JogoDaVelha"
 ```
-Para incializar o servidor, basta executar o seguinte comando no shell:
+
+Os seguintes comandos de shell decrevem como se...
+
+Incializa o servidor:
 ```
 $ python3 main.py <PORT>
 ```
-O programa recebe como argumento a porta em que desejamos que o servidor trabalhe.\
+Onde:
++ **PORT**: campo destinado a porta que o servidor irá utilizar
+
+Inicializar um cliente:
+```
+$ python3 main.py <SERVER IP> <PORT>
+```
+Onde:
++ **SERVER IP**: campo destinado ao endereço IP do servidor
++ **PORT**: campo destinado a porta do servidor
 
 ## Testes:
 Uma vez inicializado o servidor, para verificar sua correta execução, foram utilizados máquinas virtuais para simular os clientes em outras máquinas.
 
-Em cada máquina virtual, foi executado o seguinte comando:
+Em cada máquina virtual, foi criado um cliente e na máquina host foi criado o servidor. Nisso foram estabelecidas as conexões e testados todos os comandos.
 
-```
-$ python3 main.py <IP Adress> <PORT>
-```
-Onde:
-+ **IP Adress**: campo destinado ao endereço IP do servidor
-+ **PORT**: campo destinado a porta do servidor
+O código também foi testado entre computadores da mesma rede, porém apenas com duas máquinas diferentes.
