@@ -68,7 +68,7 @@ class ClientServerConnection:
                 return
             old_passwd = args[0]
             new_passwd = args[1]
-            if self.server.df.loc[self.server.df['User'] == self.user.username, 'Password'].item() != old_passwd:
+            if str(self.server.df.loc[self.server.df['User'] == self.user.username, 'Password'].item()) != old_passwd:
                 send(self.socket, "Password doesn't match")
                 return
             send(self.socket, "ack")
@@ -99,7 +99,7 @@ class ClientServerConnection:
                 self.logLogin(username, "failed")
                 return
             with self.server.df_lock:
-                if self.server.df.loc[self.server.df['User'] == user.username, 'Password'].item() != passwd:
+                if str(self.server.df.loc[self.server.df['User'] == user.username, 'Password'].item()) != passwd:
                     send(self.socket, "Password incorrect")
                     self.logLogin(username, "failed")
                     return
